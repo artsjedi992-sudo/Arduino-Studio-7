@@ -1,0 +1,9 @@
+# Visual Studio
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.pdb
+artifacts/
+Arduino-Studio-7-Windows.zip
