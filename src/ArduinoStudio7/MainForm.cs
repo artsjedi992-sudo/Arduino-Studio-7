@@ -77,6 +77,11 @@ namespace ArduinoStudio7
             toolbar.Items.Add(new ToolStripControlHost(_port));
             toolbar.Items.Add(Button("Обнови", (s,e) => RefreshPorts()));
 
+            // Редакторът трябва да заема цялата свободна област вдясно.
+            // Това е основната поправка за кода, който се показваше в малко поле.
+            _editor.Dock = DockStyle.Fill;
+            _editor.Margin = Padding.Empty;
+
             // Ляв панел за файловете на проекта.
             _projectTree.Dock = DockStyle.Fill;
             _projectTree.BackColor = Color.FromArgb(37, 37, 38);
@@ -92,18 +97,20 @@ namespace ArduinoStudio7
             _output.Font = new Font("Consolas", 9.0f);
             _output.BorderStyle = BorderStyle.None;
 
-            var upper = new SplitContainer { Size = new Size(1000, 450), Dock = DockStyle.Fill, SplitterDistance = 245, BackColor = Color.FromArgb(45,45,48) };
-            var left = new Panel { Dock = DockStyle.Fill };
-            left.Controls.Add(SectionLabel("ПРОЕКТ"));
-            _projectTree.Top = 25; _projectTree.Height = 500; _projectTree.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            var upper = new SplitContainer { Size = new Size(1000, 450), Dock = DockStyle.Fill, SplitterDistance = 245, Panel1MinSize = 150, Panel2MinSize = 300, BackColor = Color.FromArgb(45,45,48) };
+            var left = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(37, 37, 38) };
+            // Добавяме първо списъка, после заглавието, за да не се припокриват.
+            _projectTree.Dock = DockStyle.Fill;
             left.Controls.Add(_projectTree);
+            left.Controls.Add(SectionLabel("ПРОЕКТ"));
             upper.Panel1.Controls.Add(left);
             upper.Panel2.Controls.Add(_editor);
-            var lower = new Panel { Dock = DockStyle.Fill };
-            lower.Controls.Add(SectionLabel("ИЗХОД / КОМПИЛАЦИЯ"));
-            _output.Top = 25; _output.Height = 140; _output.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(24, 24, 24) };
+            // Изходът запълва долния панел под заглавната лента.
+            _output.Dock = DockStyle.Fill;
             lower.Controls.Add(_output);
-            var split = new SplitContainer { Size = new Size(1000, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 470, BackColor = Color.FromArgb(45,45,48) };
+            lower.Controls.Add(SectionLabel("ИЗХОД / КОМПИЛАЦИЯ"));
+            var split = new SplitContainer { Size = new Size(1000, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 470, Panel1MinSize = 220, Panel2MinSize = 100, BackColor = Color.FromArgb(45,45,48) };
             split.Panel1.Controls.Add(upper);
             split.Panel2.Controls.Add(lower);
             var status = new StatusStrip { BackColor = Color.FromArgb(0, 122, 204), ForeColor = Color.White };
