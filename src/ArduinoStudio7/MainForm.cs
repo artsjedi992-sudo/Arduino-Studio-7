@@ -28,6 +28,8 @@ namespace ArduinoStudio7
             Width = 1200; Height = 780;
             MinimumSize = new Size(850, 550);
             StartPosition = FormStartPosition.CenterScreen;
+            // Стартираме максимизиран, за да има достатъчно място за редактора и кода.
+            WindowState = FormWindowState.Maximized;
             BackColor = Color.FromArgb(37, 37, 38);
             ForeColor = Color.Gainsboro;
             BuildInterface();
