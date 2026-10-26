@@ -97,7 +97,7 @@ namespace ArduinoStudio7
             _output.Font = new Font("Consolas", 9.0f);
             _output.BorderStyle = BorderStyle.None;
 
-            var upper = new SplitContainer { Size = new Size(1000, 450), Dock = DockStyle.Fill, SplitterDistance = 245, Panel1MinSize = 150, Panel2MinSize = 300, BackColor = Color.FromArgb(45,45,48) };
+            var upper = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterDistance = 230, Panel1MinSize = 170, Panel2MinSize = 350, FixedPanel = FixedPanel.Panel1, IsSplitterFixed = false, BackColor = Color.FromArgb(45,45,48) };
             var left = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(37, 37, 38) };
             // Добавяме първо списъка, после заглавието, за да не се припокриват.
             _projectTree.Dock = DockStyle.Fill;
@@ -110,7 +110,7 @@ namespace ArduinoStudio7
             _output.Dock = DockStyle.Fill;
             lower.Controls.Add(_output);
             lower.Controls.Add(SectionLabel("ИЗХОД / КОМПИЛАЦИЯ"));
-            var split = new SplitContainer { Size = new Size(1000, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 470, Panel1MinSize = 220, Panel2MinSize = 100, BackColor = Color.FromArgb(45,45,48) };
+            var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 360, Panel1MinSize = 180, Panel2MinSize = 90, FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false, BackColor = Color.FromArgb(45,45,48) };
             split.Panel1.Controls.Add(upper);
             split.Panel2.Controls.Add(lower);
             var status = new StatusStrip { BackColor = Color.FromArgb(0, 122, 204), ForeColor = Color.White };
@@ -118,6 +118,18 @@ namespace ArduinoStudio7
             Controls.Add(split); Controls.Add(toolbar); Controls.Add(menu); Controls.Add(status);
             MainMenuStrip = menu;
             menu.Dock = DockStyle.Top; toolbar.Dock = DockStyle.Top; status.Dock = DockStyle.Bottom;
+
+            // След първоначалното оразмеряване задаваме пропорции според реалния размер на прозореца.
+            // Така редакторът не остава малък, когато Windows стартира приложението с различна резолюция.
+            Shown += (s, e) =>
+            {
+                if (split.Height > 300)
+                    split.SplitterDistance = Math.Max(split.Panel1MinSize,
+                        Math.Min((int)(split.Height * 0.72), split.Height - split.Panel2MinSize - split.SplitterWidth));
+                if (upper.Width > 500)
+                    upper.SplitterDistance = Math.Max(upper.Panel1MinSize,
+                        Math.Min((int)(upper.Width * 0.22), upper.Width - upper.Panel2MinSize - upper.SplitterWidth));
+            };
         }
 
         private ToolStripButton Button(string text, EventHandler action)
