@@ -1,0 +1,34 @@
+name: Build Arduino Studio 7
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Изтегляне на изходния код
+        uses: actions/checkout@v4
+      - name: Компилация с MSBuild
+        shell: pwsh
+        run: |
+          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+          if (-not $msbuild) { throw "MSBuild не е намерен" }
+          & $msbuild src/ArduinoStudio7/ArduinoStudio7.csproj /restore /p:Configuration=Release /p:Platform=AnyCPU /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Подготовка на ZIP артефакт
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item src/ArduinoStudio7/bin/Release/ArduinoStudio7.exe artifacts/
+          Copy-Item src/ArduinoStudio7/App.config artifacts/
+          Compress-Archive -Path artifacts/* -DestinationPath Arduino-Studio-7-Windows.zip -Force
+      - name: Качване на артефакта
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arduino-Studio-7-Windows
+          path: Arduino-Studio-7-Windows.zip
+          if-no-files-found: error
