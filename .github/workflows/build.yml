@@ -14,9 +14,12 @@ jobs:
       - name: Компилация с MSBuild
         shell: pwsh
         run: |
-          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
-          if (-not $msbuild) { throw "MSBuild не е намерен" }
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe не е намерен на очаквания път: $vswhere"
+          }
+          $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+          if (-not $msbuild) { throw "MSBuild не е намерен чрез vswhere.exe" }
           & $msbuild src/ArduinoStudio7/ArduinoStudio7.csproj /p:Configuration=Release /p:Platform=AnyCPU /verbosity:minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Подготовка на ZIP артефакт
