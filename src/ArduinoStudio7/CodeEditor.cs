@@ -11,6 +11,7 @@ namespace ArduinoStudio7
     {
         private readonly ToolTip _hint = new ToolTip();
         private readonly Timer _highlightTimer = new Timer();
+        private readonly ContextMenuStrip _completionMenu = new ContextMenuStrip();
         private readonly HashSet<string> _keywords = new HashSet<string>(StringComparer.Ordinal)
         {
             "void","bool","boolean","byte","char","unsigned","signed","short","int","long","float","double",
@@ -38,7 +39,9 @@ namespace ArduinoStudio7
             _highlightTimer.Tick += delegate { _highlightTimer.Stop(); HighlightSyntax(); };
             TextChanged += delegate { _highlightTimer.Stop(); _highlightTimer.Start(); };
             MouseMove += EditorMouseMove;
-            Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); };
+            MouseDown += EditorMouseDown;
+            KeyDown += EditorKeyDown;
+            Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); };
         }
 
         private void HighlightSyntax()
@@ -78,6 +81,55 @@ namespace ArduinoStudio7
                 Select(match.Index, match.Length);
                 SelectionColor = color;
             }
+        }
+
+
+        private void EditorKeyDown(object sender, KeyEventArgs e)
+        {
+            // Ctrl+Space отваря списък с често използвани Arduino/C++ символи.
+            if (e.Control && e.KeyCode == Keys.Space)
+            {
+                e.SuppressKeyPress = true;
+                ShowCompletions();
+            }
+        }
+
+        private void ShowCompletions()
+        {
+            // Показваме допълненията като меню до текущата позиция на каретката.
+            _completionMenu.Items.Clear();
+            string[] options = { "setup", "loop", "pinMode", "digitalWrite", "digitalRead", "analogRead",
+                "analogWrite", "delay", "millis", "micros", "Serial.begin", "Serial.println",
+                "HIGH", "LOW", "INPUT", "OUTPUT", "INPUT_PULLUP", "LED_BUILTIN", "bool", "byte", "int", "long", "float", "String" };
+            foreach (string option in options)
+            {
+                string value = option;
+                _completionMenu.Items.Add(value, null, (s, e) =>
+                {
+                    // Вмъкваме избраната дума/функция на мястото на каретката.
+                    SelectedText = value;
+                    Focus();
+                });
+            }
+            Point caret = GetPositionFromCharIndex(SelectionStart);
+            _completionMenu.Show(this, caret);
+        }
+
+        private void EditorMouseDown(object sender, MouseEventArgs e)
+        {
+            // Ctrl+щракване върху идентификатор премества каретката към локалната дефиниция.
+            if (e.Button != MouseButtons.Left || (ModifierKeys & Keys.Control) == 0) return;
+            int index = GetCharIndexFromPosition(e.Location);
+            if (index < 0 || index >= TextLength) return;
+            string word = GetWordAt(index);
+            if (String.IsNullOrEmpty(word)) return;
+            Match definition = Regex.Match(Text,
+                @"(?m)^\\s*(?:(?:static\\s+|inline\\s+|const\\s+|unsigned\\s+)*(?:void|bool|boolean|byte|char|short|int|long|float|double|String|size_t|[A-Z]\\w*)\\s+)?"
+                + Regex.Escape(word) + @"\\s*(?:\\([^;{}]*\\)\\s*(?:const\\s*)?\\{|[=;,)])");
+            if (!definition.Success) return;
+            Select(definition.Index, 0);
+            ScrollToCaret();
+            Focus();
         }
 
         private void EditorMouseMove(object sender, MouseEventArgs e)
