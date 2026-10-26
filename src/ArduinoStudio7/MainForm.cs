@@ -92,7 +92,7 @@ namespace ArduinoStudio7
             _output.Font = new Font("Consolas", 9.0f);
             _output.BorderStyle = BorderStyle.None;
 
-            var upper = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 245, BackColor = Color.FromArgb(45,45,48) };
+            var upper = new SplitContainer { Size = new Size(1000, 450), Dock = DockStyle.Fill, SplitterDistance = 245, BackColor = Color.FromArgb(45,45,48) };
             var left = new Panel { Dock = DockStyle.Fill };
             left.Controls.Add(SectionLabel("ПРОЕКТ"));
             _projectTree.Top = 25; _projectTree.Height = 500; _projectTree.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -103,7 +103,7 @@ namespace ArduinoStudio7
             lower.Controls.Add(SectionLabel("ИЗХОД / КОМПИЛАЦИЯ"));
             _output.Top = 25; _output.Height = 140; _output.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             lower.Controls.Add(_output);
-            var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 470, BackColor = Color.FromArgb(45,45,48) };
+            var split = new SplitContainer { Size = new Size(1000, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 470, BackColor = Color.FromArgb(45,45,48) };
             split.Panel1.Controls.Add(upper);
             split.Panel2.Controls.Add(lower);
             var status = new StatusStrip { BackColor = Color.FromArgb(0, 122, 204), ForeColor = Color.White };
