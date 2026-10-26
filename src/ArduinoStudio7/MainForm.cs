@@ -223,7 +223,7 @@ namespace ArduinoStudio7
             foreach (string file in Directory.GetFiles(_projectFolder, "*.*", SearchOption.AllDirectories)
                 .Where(f => Regex.IsMatch(Path.GetExtension(f), @"^\.(ino|h|hpp|c|cpp)$", RegexOptions.IgnoreCase))
                 .Where(f => !f.Contains(Path.DirectorySeparatorChar + "build" + Path.DirectorySeparatorChar)))
-                root.Nodes.Add(new TreeNode(Path.GetRelativePath(_projectFolder, file)) { Tag = file });
+                root.Nodes.Add(new TreeNode(file.Substring(_projectFolder.TrimEnd(Path.DirectorySeparatorChar).Length + 1)) { Tag = file });
             root.Expand(); _projectTree.Nodes.Add(root);
         }
 
