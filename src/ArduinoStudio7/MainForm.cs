@@ -60,6 +60,7 @@ namespace ArduinoStudio7
             var toolsMenu = new ToolStripMenuItem("Инструменти");
             toolsMenu.DropDownItems.Add("Настройки на Arduino CLI...", null, (s, e) => ChooseCli());
             toolsMenu.DropDownItems.Add("Подготви компилатора (AVR)", null, (s, e) => InstallAvrCore());
+            toolsMenu.DropDownItems.Add("Инсталирай библиотеката LiquidCrystal", null, (s, e) => InstallLiquidCrystal());
             toolsMenu.DropDownItems.Add("Справка за платките...", null, (s, e) => ShowBoardHelp());
             // Меню за редактиране, търсене и навигация в кода.
             var editMenu = new ToolStripMenuItem("Редактиране");
@@ -519,6 +520,41 @@ namespace ArduinoStudio7
                         : "Инсталирането на arduino:avr не успя. Проверете грешките в панела Output.";
                 }
                 catch (Exception ex) { e.Result = "Грешка при подготовката: " + ex.Message; }
+            };
+            worker.RunWorkerCompleted += (s, e) => Log(Convert.ToString(e.Result));
+            worker.RunWorkerAsync();
+        }
+
+        // Инсталираме LiquidCrystal, когато скечът използва LCD дисплей и библиотеката липсва.
+        private void InstallLiquidCrystal()
+        {
+            var answer = MessageBox.Show(this,
+                "Ще се изтегли библиотеката LiquidCrystal от Arduino Library Manager. Нужен е интернет. Да продължа ли?",
+                "Инсталиране на LiquidCrystal", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes) return;
+
+            var worker = new System.ComponentModel.BackgroundWorker();
+            worker.DoWork += (s, e) =>
+            {
+                try
+                {
+                    string folder = AppDomain.CurrentDomain.BaseDirectory;
+                    Action<string> report = line => BeginInvoke((Action)(() => Log(line)));
+                    report("Обновяване на индекса на библиотеките...");
+                    string result = _toolchain.Run("lib update-index", folder, report);
+                    if (result != "0")
+                    {
+                        e.Result = "Индексът на библиотеките не се обнови. Проверете интернет връзката и изхода.";
+                        return;
+                    }
+
+                    report("Инсталиране на библиотеката LiquidCrystal...");
+                    result = _toolchain.Run("lib install LiquidCrystal", folder, report);
+                    e.Result = result == "0"
+                        ? "LiquidCrystal е инсталирана. Опитайте отново „Скица → Провери / Компилирай“."
+                        : "Неуспешна инсталация на LiquidCrystal. Проверете грешките в панела Output.";
+                }
+                catch (Exception ex) { e.Result = "Грешка при инсталиране на LiquidCrystal: " + ex.Message; }
             };
             worker.RunWorkerCompleted += (s, e) => Log(Convert.ToString(e.Result));
             worker.RunWorkerAsync();
