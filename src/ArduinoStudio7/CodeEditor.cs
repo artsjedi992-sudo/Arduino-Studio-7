@@ -308,12 +308,12 @@ namespace ArduinoStudio7
             if (String.IsNullOrEmpty(word)) return false;
             string escaped = Regex.Escape(word);
             Match definition = Regex.Match(Text,
-                @"(?m)^[ \\t]*(?:(?:static|inline|virtual|constexpr|extern)\\s+)*(?:[\\w:~*&<>]+[ \\t]+)+" +
-                escaped + @"[ \\t]*\\([^;{}]*\\)[ \\t]*(?:const[ \\t]*)?(?:\\{|\\r?\\n[ \\t]*\\{)");
+                @"(?m)^[ \t]*(?:(?:static|inline|virtual|constexpr|extern)\s+)*(?:[\w:~*&<>]+[ \t]+)+" +
+                escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?(?:\{|\r?\n[ \t]*\{)");
             if (!definition.Success)
             {
                 // Резервен вариант за променливи, макроси и декларации.
-                definition = Regex.Match(Text, @"(?m)^[ \\t]*(?:#\\s*define\\s+)?" + escaped + @"\\b");
+                definition = Regex.Match(Text, @"(?m)^[ \t]*(?:#\s*define\s+)?" + escaped + @"\b");
             }
             if (!definition.Success) return false;
             Select(definition.Index, 0);
