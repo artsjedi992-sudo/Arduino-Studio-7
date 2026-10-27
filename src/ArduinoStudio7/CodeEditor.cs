@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq; // LINQ: използва се за филтриране и проверка на редовете при коментиране.
 using System.Drawing;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
