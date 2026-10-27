@@ -40,7 +40,10 @@ namespace ArduinoStudio7
         private void BuildInterface()
         {
             // Главното меню е подредено подобно на Visual Studio.
-            var menu = new MenuStrip { BackColor = Color.FromArgb(245, 245, 245), ForeColor = Color.FromArgb(30, 30, 30), RenderMode = ToolStripRenderMode.System };
+            var menu = new MenuStrip { BackColor = Color.FromArgb(37, 37, 38), ForeColor = Color.WhiteSmoke, RenderMode = ToolStripRenderMode.Professional };
+            // Единна цветова тема за падащите менюта и лентата с инструменти.
+            menu.Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable());
+            _editor.FindRequested += (s, e) => FindInEditor();
             var fileMenu = new ToolStripMenuItem("Файл");
             fileMenu.DropDownItems.Add("Нов скеч", null, (s, e) => NewSketch());
             fileMenu.DropDownItems.Add("Отвори...", null, (s, e) => OpenFile());
@@ -79,7 +82,8 @@ namespace ArduinoStudio7
             };
 
             // Лента с действия, платка и сериен порт.
-            var toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(245, 245, 245), ForeColor = Color.FromArgb(30, 30, 30), RenderMode = ToolStripRenderMode.System };
+            var toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(45, 45, 48), ForeColor = Color.WhiteSmoke, RenderMode = ToolStripRenderMode.Professional };
+            toolbar.Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable());
             toolbar.Items.Add(Button("Нов", (s,e) => NewSketch()));
             toolbar.Items.Add(Button("Отвори", (s,e) => OpenFile()));
             toolbar.Items.Add(Button("Запиши", (s,e) => SaveFile()));
@@ -115,18 +119,43 @@ namespace ArduinoStudio7
             _projectTree.ForeColor = Color.FromArgb(30, 30, 30);
             _projectTree.BorderStyle = BorderStyle.None;
             _projectTree.HideSelection = false;
-            _projectTree.NodeMouseDoubleClick += (s,e) => { if (e.Node.Tag is string) LoadFile((string)e.Node.Tag); };
+            _projectTree.FullRowSelect = true;
+            _projectTree.ShowLines = true;
+            _projectTree.ShowRootLines = true;
+            _projectTree.LineColor = Color.FromArgb(180, 190, 205);
+            _projectTree.NodeMouseDoubleClick += (s,e) => { if (e.Node.Tag is string && File.Exists((string)e.Node.Tag)) LoadFile((string)e.Node.Tag); };
+            // Контекстно меню на файловете и папките в Solution Explorer.
+            var treeMenu = new ContextMenuStrip();
+            treeMenu.Items.Add("Отвори файл", null, (s, e) =>
+            {
+                if (_projectTree.SelectedNode != null && _projectTree.SelectedNode.Tag is string)
+                {
+                    string path = (string)_projectTree.SelectedNode.Tag;
+                    if (File.Exists(path)) LoadFile(path);
+                }
+            });
+            treeMenu.Items.Add("Обнови изгледа", null, (s, e) => RefreshProjectTree());
+            treeMenu.Items.Add("Копирай пътя", null, (s, e) =>
+            {
+                if (_projectTree.SelectedNode != null && _projectTree.SelectedNode.Tag is string)
+                    Clipboard.SetText((string)_projectTree.SelectedNode.Tag);
+            });
+            _projectTree.ContextMenuStrip = treeMenu;
+            _projectTree.NodeMouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right) _projectTree.SelectedNode = e.Node;
+            };
 
             var projectPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
             var projectHeader = SectionLabel("SOLUTION EXPLORER");
-            projectHeader.BackColor = Color.FromArgb(235, 235, 235);
-            projectHeader.ForeColor = Color.FromArgb(30, 30, 30);
+            projectHeader.BackColor = Color.FromArgb(0, 122, 204);
+            projectHeader.ForeColor = Color.White;
             projectHeader.Dock = DockStyle.Top;
             projectHeader.Height = 27;
             projectPanel.Controls.Add(_projectTree);
             projectPanel.Controls.Add(projectHeader);
 
-            var propertiesList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Color.FromArgb(30, 30, 30) };
+            var propertiesList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(248, 250, 253), ForeColor = Color.FromArgb(30, 30, 30) };
             propertiesList.Columns.Add("Свойство", 115);
             propertiesList.Columns.Add("Стойност", 130);
             propertiesList.Items.Add(new ListViewItem(new[] { "Език", "Arduino / C++" }));
@@ -134,8 +163,8 @@ namespace ArduinoStudio7
             propertiesList.Items.Add(new ListViewItem(new[] { "Редактор", "C++ код" }));
             var propertiesPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
             var propertiesHeader = SectionLabel("PROPERTIES");
-            propertiesHeader.BackColor = Color.FromArgb(235, 235, 235);
-            propertiesHeader.ForeColor = Color.FromArgb(30, 30, 30);
+            propertiesHeader.BackColor = Color.FromArgb(0, 122, 204);
+            propertiesHeader.ForeColor = Color.White;
             propertiesHeader.Dock = DockStyle.Top;
             propertiesHeader.Height = 27;
             propertiesPanel.Controls.Add(propertiesList);
@@ -171,6 +200,8 @@ namespace ArduinoStudio7
             _output.BorderStyle = BorderStyle.None;
             var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(30, 30, 30) };
             var outputHeader = SectionLabel("OUTPUT / COMPILATION");
+            outputHeader.BackColor = Color.FromArgb(0, 122, 204);
+            outputHeader.ForeColor = Color.White;
             outputHeader.Dock = DockStyle.Top;
             outputHeader.Height = 25;
             lower.Controls.Add(_output);
@@ -210,6 +241,26 @@ namespace ArduinoStudio7
                 if (rightTools.Height > 300)
                     rightTools.SplitterDistance = Math.Max(rightTools.Panel1MinSize, Math.Min((int)(rightTools.Height * 0.68), rightTools.Height - rightTools.Panel2MinSize - rightTools.SplitterWidth));
             };
+        }
+
+        // Цветова таблица за синьо-графитова тема, вдъхновена от Visual Studio.
+        private sealed class ArduinoColorTable : ProfessionalColorTable
+        {
+            public override Color ToolStripGradientBegin { get { return Color.FromArgb(45, 45, 48); } }
+            public override Color ToolStripGradientMiddle { get { return Color.FromArgb(45, 45, 48); } }
+            public override Color ToolStripGradientEnd { get { return Color.FromArgb(45, 45, 48); } }
+            public override Color MenuStripGradientBegin { get { return Color.FromArgb(37, 37, 38); } }
+            public override Color MenuStripGradientEnd { get { return Color.FromArgb(37, 37, 38); } }
+            public override Color MenuItemSelected { get { return Color.FromArgb(62, 62, 66); } }
+            public override Color MenuItemBorder { get { return Color.FromArgb(0, 122, 204); } }
+            public override Color MenuItemSelectedGradientBegin { get { return Color.FromArgb(0, 122, 204); } }
+            public override Color MenuItemSelectedGradientEnd { get { return Color.FromArgb(0, 122, 204); } }
+            public override Color MenuItemPressedGradientBegin { get { return Color.FromArgb(0, 90, 158); } }
+            public override Color MenuItemPressedGradientMiddle { get { return Color.FromArgb(0, 90, 158); } }
+            public override Color MenuItemPressedGradientEnd { get { return Color.FromArgb(0, 90, 158); } }
+            public override Color ToolStripBorder { get { return Color.FromArgb(65, 65, 68); } }
+            public override Color SeparatorDark { get { return Color.FromArgb(80, 80, 84); } }
+            public override Color SeparatorLight { get { return Color.FromArgb(45, 45, 48); } }
         }
 
         private string AskText(string title, string prompt, string initialValue)
