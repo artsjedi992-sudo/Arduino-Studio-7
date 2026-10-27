@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace ArduinoStudio7
@@ -9,6 +10,12 @@ namespace ArduinoStudio7
     // Редактор с тъмен изглед, оцветяване и локални подсказки без външни библиотеки.
     public sealed class CodeEditor : RichTextBox
     {
+        // Win32 съобщения за запазване на видимия ред при оцветяване.
+        private const int WM_SETREDRAW = 0x000B;
+        private const int EM_GETFIRSTVISIBLELINE = 0x00CE;
+        private const int EM_LINESCROLL = 0x00B6;
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
         private readonly ToolTip _hint = new ToolTip();
         private readonly Timer _highlightTimer = new Timer();
         private readonly ContextMenuStrip _completionMenu = new ContextMenuStrip();
@@ -46,32 +53,47 @@ namespace ArduinoStudio7
 
         private void HighlightSyntax()
         {
-            // Запазваме позицията на каретката и не променяме текста.
+            // Запазваме каретката и най-горния видим ред, за да не подскача редакторът.
+            if (TextLength == 0 || !IsHandleCreated) return;
             int caret = SelectionStart;
-            if (TextLength == 0) return;
-            SelectAll();
-            SelectionColor = Color.FromArgb(30, 30, 30);
-            // Оцветяваме коментарите, низовете и числата.
-            ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
-            ApplyColor(@"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
-            ApplyColor(@"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
-            // Оцветяваме ключовите думи и имената, след които следва скоба за извикване.
-            foreach (Match match in Regex.Matches(Text, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
+            int selectionLength = SelectionLength;
+            int firstVisibleLine = (int)SendMessage(Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+            SendMessage(Handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
+            try
             {
-                string word = match.Value;
-                if (_keywords.Contains(word))
+                // Оцветяването променя само форматирането, а не самия текст.
+                SelectAll();
+                SelectionColor = Color.FromArgb(30, 30, 30);
+                ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
+                ApplyColor(@"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
+                ApplyColor(@"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
+
+                string source = Text;
+                foreach (Match match in Regex.Matches(source, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
                 {
-                    Select(match.Index, match.Length);
-                    SelectionColor = Color.FromArgb(0, 0, 255);
+                    string word = match.Value;
+                    if (_keywords.Contains(word))
+                    {
+                        Select(match.Index, match.Length);
+                        SelectionColor = Color.FromArgb(0, 0, 255);
+                    }
+                    else if (Regex.IsMatch(source.Substring(match.Index + match.Length), @"^\s*\("))
+                    {
+                        Select(match.Index, match.Length);
+                        SelectionColor = Color.FromArgb(121, 94, 38);
+                    }
                 }
-                else if (Regex.IsMatch(Text.Substring(match.Index + match.Length), @"^\s*\("))
-                {
-                    Select(match.Index, match.Length);
-                    SelectionColor = Color.FromArgb(121, 94, 38);
-                }
+                // Връщаме избора и позицията на курсора, без да принуждаваме скрола към тях.
+                Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - caret)));
+                SelectionColor = Color.FromArgb(30, 30, 30);
             }
-            Select(Math.Min(caret, TextLength), 0);
-            SelectionColor = Color.FromArgb(30, 30, 30);
+            finally
+            {
+                SendMessage(Handle, WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
+                int currentLine = (int)SendMessage(Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+                SendMessage(Handle, EM_LINESCROLL, IntPtr.Zero, new IntPtr(firstVisibleLine - currentLine));
+                Invalidate();
+            }
         }
 
         private void ApplyColor(string pattern, Color color)
@@ -86,12 +108,90 @@ namespace ArduinoStudio7
 
         private void EditorKeyDown(object sender, KeyEventArgs e)
         {
-            // Ctrl+Space отваря списък с често използвани Arduino/C++ символи.
+            // Enter наследява отместването на предходния ред.
+            if (e.KeyCode == Keys.Enter && !e.Control && !e.Alt)
+            {
+                int lineStart = Text.LastIndexOf('\n', Math.Max(0, SelectionStart - 1));
+                lineStart = lineStart < 0 ? 0 : lineStart + 1;
+                string previousLine = Text.Substring(lineStart, SelectionStart - lineStart);
+                string indent = Regex.Match(previousLine, @"^\s*").Value;
+                if (previousLine.TrimEnd().EndsWith("{")) indent += "    ";
+                e.SuppressKeyPress = true;
+                SelectedText = Environment.NewLine + indent;
+                return;
+            }
+
+            // Ctrl+Space показва локалните допълнения.
             if (e.Control && e.KeyCode == Keys.Space)
             {
                 e.SuppressKeyPress = true;
                 ShowCompletions();
             }
+            // Ctrl+/ коментира или разкоментира избраните редове.
+            if (e.Control && e.KeyCode == Keys.OemQuestion)
+            {
+                e.SuppressKeyPress = true;
+                ToggleCommentSelection();
+            }
+        }
+
+        // Търси след текущата позиция и продължава от началото при нужда.
+        public bool FindNext(string searchText)
+        {
+            if (String.IsNullOrEmpty(searchText)) return false;
+            int start = Math.Min(SelectionStart + SelectionLength, TextLength);
+            int found = Find(searchText, start, RichTextBoxFinds.None);
+            if (found < 0 && start > 0) found = Find(searchText, 0, RichTextBoxFinds.None);
+            if (found >= 0) { Select(found, searchText.Length); ScrollToCaret(); Focus(); return true; }
+            return false;
+        }
+
+        // Замества всички срещания, като запазва позицията на каретката.
+        public int ReplaceAllText(string searchText, string replacementText)
+        {
+            if (String.IsNullOrEmpty(searchText)) return 0;
+            int caret = SelectionStart;
+            int count = Regex.Matches(Text, Regex.Escape(searchText), RegexOptions.None).Count;
+            Text = Text.Replace(searchText, replacementText ?? String.Empty);
+            Select(Math.Min(caret, TextLength), 0);
+            return count;
+        }
+
+        // Премества курсора към зададен ред, като броенето започва от 1.
+        public bool GoToLine(int lineNumber)
+        {
+            if (lineNumber < 1 || lineNumber > Lines.Length) return false;
+            int index = GetFirstCharIndexFromLine(lineNumber - 1);
+            if (index < 0) return false;
+            Select(index, 0);
+            ScrollToCaret();
+            Focus();
+            return true;
+        }
+
+        // Добавя или премахва // за избраните редове.
+        public void ToggleCommentSelection()
+        {
+            int selectionStart = SelectionStart;
+            int selectionEnd = SelectionStart + SelectionLength;
+            int firstLine = GetLineFromCharIndex(selectionStart);
+            int lastLine = GetLineFromCharIndex(Math.Max(selectionStart, selectionEnd - 1));
+            int start = GetFirstCharIndexFromLine(firstLine);
+            int end = lastLine + 1 < Lines.Length ? GetFirstCharIndexFromLine(lastLine + 1) : TextLength;
+            string block = Text.Substring(start, end - start);
+            string[] lines = block.Split(new[] { "\\r\\n", "\\n" }, StringSplitOptions.None);
+            bool remove = lines.Where(line => !String.IsNullOrWhiteSpace(line)).All(line => line.TrimStart().StartsWith("//"));
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (String.IsNullOrWhiteSpace(lines[i])) continue;
+                int indent = lines[i].Length - lines[i].TrimStart().Length;
+                if (remove) lines[i] = lines[i].Remove(indent, 2).Insert(indent, "");
+                else lines[i] = lines[i].Insert(indent, "//");
+            }
+            string result = String.Join(Environment.NewLine, lines);
+            Select(start, end - start);
+            SelectedText = result;
+            Select(start, Math.Min(result.Length, TextLength - start));
         }
 
         private void ShowCompletions()
