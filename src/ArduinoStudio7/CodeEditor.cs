@@ -179,7 +179,7 @@ namespace ArduinoStudio7
             int start = GetFirstCharIndexFromLine(firstLine);
             int end = lastLine + 1 < Lines.Length ? GetFirstCharIndexFromLine(lastLine + 1) : TextLength;
             string block = Text.Substring(start, end - start);
-            string[] lines = block.Split(new[] { "\\r\\n", "\\n" }, StringSplitOptions.None);
+            string[] lines = block.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
             bool remove = lines.Where(line => !String.IsNullOrWhiteSpace(line)).All(line => line.TrimStart().StartsWith("//"));
             for (int i = 0; i < lines.Length; i++)
             {
