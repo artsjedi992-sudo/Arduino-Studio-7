@@ -165,7 +165,7 @@ namespace ArduinoStudio7
         }
 
         // Дублира избрания текст или целия ред, ако няма маркиран блок.
-        private void DuplicateCurrentLineOrSelection()
+        public void DuplicateCurrentLineOrSelection()
         {
             if (SelectionLength > 0)
             {
