@@ -24,6 +24,10 @@ namespace ArduinoStudio7
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private readonly ToolTip _hint = new ToolTip();
+        // Запомняме последната подсказка, за да не я показваме наново при всяко MouseMove.
+        private string _lastHintWord = null;
+        private string _lastHintText = null;
+        private bool _hintVisible = false;
         private readonly Timer _highlightTimer = new Timer();
         private readonly ContextMenuStrip _completionMenu = new ContextMenuStrip();
         private readonly HashSet<string> _keywords = new HashSet<string>(StringComparer.Ordinal)
@@ -41,6 +45,11 @@ namespace ArduinoStudio7
         {
             // Настройваме моноширинен шрифт и цветове, наподобяващи Visual Studio.
             Font = new Font("Consolas", 10.0f);
+            // Задаваме стабилни времена на подсказките, без постоянно премигване.
+            _hint.InitialDelay = 450;
+            _hint.ReshowDelay = 250;
+            _hint.AutoPopDelay = 10000;
+            _hint.ShowAlways = true;
             BackColor = Color.White;
             ForeColor = Color.FromArgb(30, 30, 30);
             BorderStyle = BorderStyle.None;
@@ -360,13 +369,41 @@ namespace ArduinoStudio7
 
         private void EditorMouseMove(object sender, MouseEventArgs e)
         {
-            // Определяме думата под курсора и показваме справка, когато е налична.
+            // Ако курсорът е извън текста, скриваме подсказката само веднъж.
             int index = GetCharIndexFromPosition(e.Location);
-            if (index < 0 || index >= TextLength) return;
+            if (index < 0 || index >= TextLength)
+            {
+                HideHint();
+                return;
+            }
+
+            // Не преизчисляваме и не показваме повторно една и съща подсказка
+            // при всяко малко движение на мишката — това причиняваше премигване.
             string word = GetWordAt(index);
+            if (String.Equals(word, _lastHintWord, StringComparison.Ordinal))
+                return;
+
             string tip = BuildHint(word);
-            if (tip == null) { _hint.Hide(this); return; }
-            _hint.Show(tip, this, e.Location.X + 14, e.Location.Y + 18, 4000);
+            if (String.IsNullOrEmpty(tip))
+            {
+                HideHint();
+                _lastHintWord = word;
+                return;
+            }
+
+            _lastHintWord = word;
+            _lastHintText = tip;
+            _hint.Show(tip, this, e.Location.X + 14, e.Location.Y + 18, 10000);
+            _hintVisible = true;
+        }
+
+        // Скриваме подсказката и изчистваме кеша само при реална промяна на думата.
+        private void HideHint()
+        {
+            if (_hintVisible) _hint.Hide(this);
+            _hintVisible = false;
+            _lastHintWord = null;
+            _lastHintText = null;
         }
 
         private string GetWordAt(int index)
