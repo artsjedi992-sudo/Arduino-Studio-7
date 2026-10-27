@@ -59,6 +59,7 @@ namespace ArduinoStudio7
             buildMenu.DropDownItems.Add("Обнови COM портове", null, (s, e) => RefreshPorts());
             var toolsMenu = new ToolStripMenuItem("Инструменти");
             toolsMenu.DropDownItems.Add("Настройки на Arduino CLI...", null, (s, e) => ChooseCli());
+            toolsMenu.DropDownItems.Add("Подготви компилатора (AVR)", null, (s, e) => InstallAvrCore());
             toolsMenu.DropDownItems.Add("Справка за платките...", null, (s, e) => ShowBoardHelp());
             // Меню за редактиране, търсене и навигация в кода.
             var editMenu = new ToolStripMenuItem("Редактиране");
@@ -484,6 +485,52 @@ namespace ArduinoStudio7
         }
 
         private string Quote(string value) { return "\"" + value.Replace("\"", "\\\"") + "\""; }
+
+        // Подготвяме Arduino CLI при първа употреба: индексите, вградените инструменти и AVR ядрото.
+        private void InstallAvrCore()
+        {
+            var answer = MessageBox.Show(this,
+                "Ще се изтеглят необходимите инструменти и AVR пакет за Uno/Mega/Nano. Нужен е интернет. Да продължа ли?",
+                "Подготовка на компилатора", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes) return;
+
+            var worker = new System.ComponentModel.BackgroundWorker();
+            worker.DoWork += (s, e) =>
+            {
+                try
+                {
+                    string folder = AppDomain.CurrentDomain.BaseDirectory;
+                    Action<string> report = line => BeginInvoke((Action)(() => Log(line)));
+
+                    // Първото стартиране може да съобщи, че липсват вградените инструменти.
+                    // Обновяването на индекса ги изтегля/подготвя за следващите команди.
+                    report("Стъпка 1/3: обновяване на индексите...");
+                    string result = _toolchain.Run("core update-index", folder, report);
+                    if (result != "0")
+                    {
+                        e.Result = "Неуспешно обновяване на индексите. Проверете съобщенията по-горе.";
+                        return;
+                    }
+
+                    report("Стъпка 2/3: инсталиране на вградените инструменти...");
+                    result = _toolchain.Run("config dump", folder, report);
+                    if (result != "0")
+                    {
+                        e.Result = "Неуспешна проверка на конфигурацията на Arduino CLI.";
+                        return;
+                    }
+
+                    report("Стъпка 3/3: инсталиране на arduino:avr...");
+                    result = _toolchain.Run("core install arduino:avr", folder, report);
+                    e.Result = result == "0"
+                        ? "Готово. AVR компилаторът е инсталиран; пробвайте „Скица → Провери / Компилирай“."
+                        : "Инсталирането на arduino:avr не успя. Проверете грешките в панела Output.";
+                }
+                catch (Exception ex) { e.Result = "Грешка при подготовката: " + ex.Message; }
+            };
+            worker.RunWorkerCompleted += (s, e) => Log(Convert.ToString(e.Result));
+            worker.RunWorkerAsync();
+        }
 
         private void ChooseCli()
         {
