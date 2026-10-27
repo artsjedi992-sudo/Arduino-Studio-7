@@ -55,7 +55,19 @@ namespace ArduinoStudio7
             MouseMove += EditorMouseMove;
             MouseDown += EditorMouseDown;
             KeyDown += EditorKeyDown;
-            Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); };
+            // Контекстно меню с често използвани команди за редактиране.
+            var editorMenu = new ContextMenuStrip();
+            editorMenu.Items.Add("Изрежи", null, (s, e) => Cut());
+            editorMenu.Items.Add("Копирай", null, (s, e) => Copy());
+            editorMenu.Items.Add("Постави", null, (s, e) => Paste());
+            editorMenu.Items.Add("Избери всичко", null, (s, e) => SelectAll());
+            editorMenu.Items.Add(new ToolStripSeparator());
+            editorMenu.Items.Add("Дублирай ред / избор  Ctrl+D", null, (s, e) => DuplicateCurrentLineOrSelection());
+            editorMenu.Items.Add("Коментирай / разкоментирай", null, (s, e) => ToggleCommentSelection());
+            editorMenu.Items.Add("Намери в кода", null, (s, e) => RequestFind());
+            editorMenu.Items.Add("Към дефиницията  Ctrl+щракване", null, (s, e) => NavigateFromCaret());
+            ContextMenuStrip = editorMenu;
+            Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
         }
 
         private void HighlightSyntax()
@@ -141,6 +153,12 @@ namespace ArduinoStudio7
                 SelectedText = Environment.NewLine + indent;
                 return;
             }
+
+            // Ctrl+A маркира целия код.
+            if (e.Control && e.KeyCode == Keys.A) { SelectAll(); e.SuppressKeyPress = true; return; }
+            // Ctrl+Z / Ctrl+Y използват стандартната undo/redo поддръжка на RichTextBox.
+            if (e.Control && e.KeyCode == Keys.Z) { Undo(); e.SuppressKeyPress = true; return; }
+            if (e.Control && e.KeyCode == Keys.Y) { e.SuppressKeyPress = true; return; }
 
             // Ctrl+D дублира текущия ред или избрания блок код.
             if (e.Control && e.KeyCode == Keys.D)
@@ -268,20 +286,54 @@ namespace ArduinoStudio7
 
         private void EditorMouseDown(object sender, MouseEventArgs e)
         {
-            // Ctrl+щракване върху идентификатор премества каретката към локалната дефиниция.
+            // При десен бутон поставяме каретката на мястото на клика, ако няма маркиран текст.
+            if (e.Button == MouseButtons.Right && SelectionLength == 0)
+            {
+                int clicked = GetCharIndexFromPosition(e.Location);
+                if (clicked >= 0 && clicked <= TextLength) Select(clicked, 0);
+                return;
+            }
+            // Ctrl+щракване върху име на функция търси тялото ѝ в текущия файл.
             if (e.Button != MouseButtons.Left || (ModifierKeys & Keys.Control) == 0) return;
             int index = GetCharIndexFromPosition(e.Location);
             if (index < 0 || index >= TextLength) return;
             string word = GetWordAt(index);
             if (String.IsNullOrEmpty(word)) return;
+            NavigateToDefinition(word);
+        }
+
+        // Навигира към дефиниция на функция или към първа декларация на идентификатора.
+        private bool NavigateToDefinition(string word)
+        {
+            if (String.IsNullOrEmpty(word)) return false;
+            string escaped = Regex.Escape(word);
             Match definition = Regex.Match(Text,
-                @"(?m)^\\s*(?:(?:static\\s+|inline\\s+|const\\s+|unsigned\\s+)*(?:void|bool|boolean|byte|char|short|int|long|float|double|String|size_t|[A-Z]\\w*)\\s+)?"
-                + Regex.Escape(word) + @"\\s*(?:\\([^;{}]*\\)\\s*(?:const\\s*)?\\{|[=;,)])");
-            if (!definition.Success) return;
+                @"(?m)^[ \\t]*(?:(?:static|inline|virtual|constexpr|extern)\\s+)*(?:[\\w:~*&<>]+[ \\t]+)+" +
+                escaped + @"[ \\t]*\\([^;{}]*\\)[ \\t]*(?:const[ \\t]*)?(?:\\{|\\r?\\n[ \\t]*\\{)");
+            if (!definition.Success)
+            {
+                // Резервен вариант за променливи, макроси и декларации.
+                definition = Regex.Match(Text, @"(?m)^[ \\t]*(?:#\\s*define\\s+)?" + escaped + @"\\b");
+            }
+            if (!definition.Success) return false;
             Select(definition.Index, 0);
             ScrollToCaret();
             Focus();
+            return true;
         }
+
+        // Използва се от контекстното меню „Към дефиницията“.
+        public void NavigateFromCaret()
+        {
+            string word = GetWordAt(SelectionStart);
+            if (!NavigateToDefinition(word))
+                MessageBox.Show(this, "Не е намерена дефиниция на този идентификатор в текущия файл.", "Навигация в кода",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // Съобщава на главния прозорец, че трябва да отвори диалога за търсене.
+        public event EventHandler FindRequested;
+        private void RequestFind() { FindRequested?.Invoke(this, EventArgs.Empty); }
 
         private void EditorMouseMove(object sender, MouseEventArgs e)
         {
