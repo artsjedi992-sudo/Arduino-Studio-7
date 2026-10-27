@@ -125,7 +125,12 @@ namespace ArduinoStudio7
             _projectTree.LineColor = Color.FromArgb(180, 190, 205);
             _projectTree.NodeMouseDoubleClick += (s,e) => { if (e.Node.Tag is string && File.Exists((string)e.Node.Tag)) LoadFile((string)e.Node.Tag); };
             // Контекстно меню на файловете и папките в Solution Explorer.
-            var treeMenu = new ContextMenuStrip();
+            var treeMenu = new ContextMenuStrip
+            {
+                BackColor = Color.FromArgb(37, 37, 38),
+                ForeColor = Color.WhiteSmoke,
+                Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable())
+            };
             treeMenu.Items.Add("Отвори файл", null, (s, e) =>
             {
                 if (_projectTree.SelectedNode != null && _projectTree.SelectedNode.Tag is string)
