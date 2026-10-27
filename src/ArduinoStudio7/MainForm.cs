@@ -125,7 +125,7 @@ namespace ArduinoStudio7
 
             var rightTools = new SplitContainer
             {
-                Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
+                Size = new Size(300, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
                 SplitterDistance = 340, Panel1MinSize = 150, Panel2MinSize = 100,
                 FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
                 BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
@@ -136,7 +136,7 @@ namespace ArduinoStudio7
             // Главният разделител дава приблизително 80% от ширината на кода.
             var upper = new SplitContainer
             {
-                Dock = DockStyle.Fill, Orientation = Orientation.Vertical,
+                Size = new Size(1200, 700), Dock = DockStyle.Fill, Orientation = Orientation.Vertical,
                 SplitterDistance = 900, Panel1MinSize = 350, Panel2MinSize = 220,
                 FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
                 BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
@@ -160,8 +160,8 @@ namespace ArduinoStudio7
 
             var split = new SplitContainer
             {
-                Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
-                SplitterDistance = 650, Panel1MinSize = 220, Panel2MinSize = 90,
+                Size = new Size(1200, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
+                SplitterDistance = 500, Panel1MinSize = 220, Panel2MinSize = 90,
                 FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
                 BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
             };
