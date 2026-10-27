@@ -63,6 +63,7 @@ namespace ArduinoStudio7
             editMenu.DropDownItems.Add("Замени всички...", null, (s, e) => ReplaceInEditor());
             editMenu.DropDownItems.Add("Отиди на ред...   Ctrl+G", null, (s, e) => GoToEditorLine());
             editMenu.DropDownItems.Add(new ToolStripSeparator());
+            editMenu.DropDownItems.Add("Дублирай ред / избран текст   Ctrl+D", null, (s, e) => _editor.DuplicateCurrentLineOrSelection());
             editMenu.DropDownItems.Add("Коментирай / разкоментирай   Ctrl+/", null, (s, e) => _editor.ToggleCommentSelection());
             menu.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, buildMenu, toolsMenu });
             MainMenuStrip = menu;
@@ -73,6 +74,8 @@ namespace ArduinoStudio7
                 if (e.Control && e.KeyCode == Keys.F) { e.SuppressKeyPress = true; FindInEditor(); }
                 else if (e.Control && e.KeyCode == Keys.H) { e.SuppressKeyPress = true; ReplaceInEditor(); }
                 else if (e.Control && e.KeyCode == Keys.G) { e.SuppressKeyPress = true; GoToEditorLine(); }
+                else if (e.Control && e.KeyCode == Keys.S && e.Shift) { e.SuppressKeyPress = true; SaveFileAs(); }
+                else if (e.Control && e.KeyCode == Keys.S) { e.SuppressKeyPress = true; SaveFile(); }
             };
 
             // Лента с действия, платка и сериен порт.
