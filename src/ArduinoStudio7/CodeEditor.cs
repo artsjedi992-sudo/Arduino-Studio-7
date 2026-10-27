@@ -56,7 +56,12 @@ namespace ArduinoStudio7
             MouseDown += EditorMouseDown;
             KeyDown += EditorKeyDown;
             // Контекстно меню с често използвани команди за редактиране.
-            var editorMenu = new ContextMenuStrip();
+            var editorMenu = new ContextMenuStrip
+            {
+                BackColor = Color.FromArgb(37, 37, 38),
+                ForeColor = Color.WhiteSmoke,
+                Renderer = new ToolStripProfessionalRenderer()
+            };
             editorMenu.Items.Add("Изрежи", null, (s, e) => Cut());
             editorMenu.Items.Add("Копирай", null, (s, e) => Copy());
             editorMenu.Items.Add("Постави", null, (s, e) => Paste());
