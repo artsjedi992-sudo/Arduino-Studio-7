@@ -13,8 +13,14 @@ namespace ArduinoStudio7
     {
         // Win32 съобщения за запазване на видимия ред при оцветяване.
         private const int WM_SETREDRAW = 0x000B;
-        private const int EM_GETFIRSTVISIBLELINE = 0x00CE;
-        private const int EM_LINESCROLL = 0x00B6;
+        private const int EM_GETSCROLLPOS = 0x04DD;
+        private const int EM_SETSCROLLPOS = 0x04DE;
+
+        // Точка за запазване на точната хоризонтална и вертикална позиция на скрола.
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct NativePoint { public int X; public int Y; }
+
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref NativePoint point);
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private readonly ToolTip _hint = new ToolTip();
@@ -54,18 +60,22 @@ namespace ArduinoStudio7
 
         private void HighlightSyntax()
         {
-            // Запазваме каретката и най-горния видим ред, за да не подскача редакторът.
+            // Запазваме каретката и точната позиция на скрола преди оцветяване.
             if (TextLength == 0 || !IsHandleCreated) return;
             int caret = SelectionStart;
             int selectionLength = SelectionLength;
-            int firstVisibleLine = (int)SendMessage(Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+            NativePoint scrollPosition = new NativePoint();
+            SendMessage(Handle, EM_GETSCROLLPOS, IntPtr.Zero, ref scrollPosition);
             SendMessage(Handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
             try
             {
-                // Оцветяването променя само форматирането, а не самия текст.
+                // Базовият цвят е тъмносив, подобно на светлата тема на Visual Studio.
                 SelectAll();
                 SelectionColor = Color.FromArgb(30, 30, 30);
-                ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
+
+                // Препроцесорни директиви: #include, #define, #if и други.
+                ApplyColor(@"(?m)^\s*#\s*\w+.*$", Color.FromArgb(175, 90, 190));
+                // Текстови константи и числа.
                 ApplyColor(@"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
                 ApplyColor(@"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
 
@@ -76,23 +86,33 @@ namespace ArduinoStudio7
                     if (_keywords.Contains(word))
                     {
                         Select(match.Index, match.Length);
-                        SelectionColor = Color.FromArgb(0, 0, 255);
+                        // Ключови думи и Arduino константи — синьо.
+                        SelectionColor = Color.FromArgb(0, 0, 220);
                     }
                     else if (Regex.IsMatch(source.Substring(match.Index + match.Length), @"^\s*\("))
                     {
                         Select(match.Index, match.Length);
+                        // Имена на функции — кафяво/златисто.
                         SelectionColor = Color.FromArgb(121, 94, 38);
                     }
+                    else if (Regex.IsMatch(word, @"^(?:uint\d+_t|int\d+_t|size_t|String|HardwareSerial)$"))
+                    {
+                        Select(match.Index, match.Length);
+                        // Често използвани типове — синьо-зелено.
+                        SelectionColor = Color.FromArgb(43, 145, 175);
+                    }
                 }
-                // Връщаме избора и позицията на курсора, без да принуждаваме скрола към тях.
+                // Коментарите се оцветяват последни, за да запазят зеления цвят навсякъде.
+                ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
+
+                // Връщаме избора и позицията на курсора.
                 Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - caret)));
-                SelectionColor = Color.FromArgb(30, 30, 30);
             }
             finally
             {
+                // Възстановяваме скрола чрез Win32 позиция, без да го местим към каретката.
+                SendMessage(Handle, EM_SETSCROLLPOS, IntPtr.Zero, ref scrollPosition);
                 SendMessage(Handle, WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
-                int currentLine = (int)SendMessage(Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
-                SendMessage(Handle, EM_LINESCROLL, IntPtr.Zero, new IntPtr(firstVisibleLine - currentLine));
                 Invalidate();
             }
         }
@@ -122,6 +142,14 @@ namespace ArduinoStudio7
                 return;
             }
 
+            // Ctrl+D дублира текущия ред или избрания блок код.
+            if (e.Control && e.KeyCode == Keys.D)
+            {
+                e.SuppressKeyPress = true;
+                DuplicateCurrentLineOrSelection();
+                return;
+            }
+
             // Ctrl+Space показва локалните допълнения.
             if (e.Control && e.KeyCode == Keys.Space)
             {
@@ -134,6 +162,28 @@ namespace ArduinoStudio7
                 e.SuppressKeyPress = true;
                 ToggleCommentSelection();
             }
+        }
+
+        // Дублира избрания текст или целия ред, ако няма маркиран блок.
+        private void DuplicateCurrentLineOrSelection()
+        {
+            if (SelectionLength > 0)
+            {
+                string selected = SelectedText;
+                int start = SelectionStart;
+                SelectedText = selected + selected;
+                Select(start + selected.Length, selected.Length);
+                return;
+            }
+
+            int line = GetLineFromCharIndex(SelectionStart);
+            int startIndex = GetFirstCharIndexFromLine(line);
+            if (startIndex < 0) return;
+            int endIndex = line + 1 < Lines.Length ? GetFirstCharIndexFromLine(line + 1) : TextLength;
+            string lineText = Text.Substring(startIndex, endIndex - startIndex);
+            Select(endIndex, 0);
+            SelectedText = lineText;
+            Select(startIndex, lineText.Length);
         }
 
         // Търси след текущата позиция и продължава от началото при нужда.
