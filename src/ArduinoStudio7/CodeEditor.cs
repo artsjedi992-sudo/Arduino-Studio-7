@@ -27,8 +27,8 @@ namespace ArduinoStudio7
         {
             // Настройваме моноширинен шрифт и цветове, наподобяващи Visual Studio.
             Font = new Font("Consolas", 10.0f);
-            BackColor = Color.FromArgb(30, 30, 30);
-            ForeColor = Color.FromArgb(220, 220, 220);
+            BackColor = Color.White;
+            ForeColor = Color.FromArgb(30, 30, 30);
             BorderStyle = BorderStyle.None;
             AcceptsTab = true;
             WordWrap = false;
@@ -50,11 +50,11 @@ namespace ArduinoStudio7
             int caret = SelectionStart;
             if (TextLength == 0) return;
             SelectAll();
-            SelectionColor = Color.FromArgb(220, 220, 220);
+            SelectionColor = Color.FromArgb(30, 30, 30);
             // Оцветяваме коментарите, низовете и числата.
-            ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(106, 153, 85));
-            ApplyColor(@"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(206, 145, 120));
-            ApplyColor(@"\b\d+(?:\.\d+)?\b", Color.FromArgb(181, 206, 168));
+            ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
+            ApplyColor(@"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
+            ApplyColor(@"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
             // Оцветяваме ключовите думи и имената, след които следва скоба за извикване.
             foreach (Match match in Regex.Matches(Text, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
             {
@@ -62,16 +62,16 @@ namespace ArduinoStudio7
                 if (_keywords.Contains(word))
                 {
                     Select(match.Index, match.Length);
-                    SelectionColor = Color.FromArgb(86, 156, 214);
+                    SelectionColor = Color.FromArgb(0, 0, 255);
                 }
                 else if (Regex.IsMatch(Text.Substring(match.Index + match.Length), @"^\s*\("))
                 {
                     Select(match.Index, match.Length);
-                    SelectionColor = Color.FromArgb(220, 220, 170);
+                    SelectionColor = Color.FromArgb(121, 94, 38);
                 }
             }
             Select(Math.Min(caret, TextLength), 0);
-            SelectionColor = Color.FromArgb(220, 220, 220);
+            SelectionColor = Color.FromArgb(30, 30, 30);
         }
 
         private void ApplyColor(string pattern, Color color)
