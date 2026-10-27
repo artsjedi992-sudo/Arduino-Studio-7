@@ -30,8 +30,8 @@ namespace ArduinoStudio7
             StartPosition = FormStartPosition.CenterScreen;
             // Стартираме максимизиран, за да има достатъчно място за редактора и кода.
             WindowState = FormWindowState.Maximized;
-            BackColor = Color.FromArgb(37, 37, 38);
-            ForeColor = Color.Gainsboro;
+            BackColor = Color.FromArgb(238, 242, 250); // Светъл синьо-сив фон като Visual Studio 2019.
+            ForeColor = Color.FromArgb(30, 30, 30);
             BuildInterface();
             NewSketch();
             RefreshPorts();
@@ -40,7 +40,7 @@ namespace ArduinoStudio7
         private void BuildInterface()
         {
             // Главното меню е подредено подобно на Visual Studio.
-            var menu = new MenuStrip { BackColor = Color.FromArgb(37, 37, 38), ForeColor = Color.WhiteSmoke, RenderMode = ToolStripRenderMode.Professional };
+            var menu = new MenuStrip { BackColor = Color.FromArgb(238, 242, 250), ForeColor = Color.FromArgb(30, 30, 30), RenderMode = ToolStripRenderMode.Professional };
             // Единна цветова тема за падащите менюта и лентата с инструменти.
             menu.Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable());
             _editor.FindRequested += (s, e) => FindInEditor();
@@ -82,7 +82,7 @@ namespace ArduinoStudio7
             };
 
             // Лента с действия, платка и сериен порт.
-            var toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(45, 45, 48), ForeColor = Color.WhiteSmoke, RenderMode = ToolStripRenderMode.Professional };
+            var toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(238, 242, 250), ForeColor = Color.FromArgb(30, 30, 30), RenderMode = ToolStripRenderMode.Professional };
             toolbar.Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable());
             toolbar.Items.Add(Button("Нов", (s,e) => NewSketch()));
             toolbar.Items.Add(Button("Отвори", (s,e) => OpenFile()));
@@ -127,8 +127,8 @@ namespace ArduinoStudio7
             // Контекстно меню на файловете и папките в Solution Explorer.
             var treeMenu = new ContextMenuStrip
             {
-                BackColor = Color.FromArgb(37, 37, 38),
-                ForeColor = Color.WhiteSmoke,
+                BackColor = Color.FromArgb(248, 249, 252),
+                ForeColor = Color.FromArgb(30, 30, 30),
                 Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable())
             };
             treeMenu.Items.Add("Отвори файл", null, (s, e) =>
@@ -153,7 +153,7 @@ namespace ArduinoStudio7
 
             var projectPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
             var projectHeader = SectionLabel("SOLUTION EXPLORER");
-            projectHeader.BackColor = Color.FromArgb(0, 122, 204);
+            projectHeader.BackColor = Color.FromArgb(83, 102, 153);
             projectHeader.ForeColor = Color.White;
             projectHeader.Dock = DockStyle.Top;
             projectHeader.Height = 27;
@@ -168,7 +168,7 @@ namespace ArduinoStudio7
             propertiesList.Items.Add(new ListViewItem(new[] { "Редактор", "C++ код" }));
             var propertiesPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
             var propertiesHeader = SectionLabel("PROPERTIES");
-            propertiesHeader.BackColor = Color.FromArgb(0, 122, 204);
+            propertiesHeader.BackColor = Color.FromArgb(83, 102, 153);
             propertiesHeader.ForeColor = Color.White;
             propertiesHeader.Dock = DockStyle.Top;
             propertiesHeader.Height = 27;
@@ -199,13 +199,13 @@ namespace ArduinoStudio7
             // Долният прозорец за грешки и компилация е отделен и може да се преоразмерява.
             _output.Dock = DockStyle.Fill;
             _output.ReadOnly = true;
-            _output.BackColor = Color.FromArgb(30, 30, 30);
-            _output.ForeColor = Color.FromArgb(230, 230, 230);
+            _output.BackColor = Color.White;
+            _output.ForeColor = Color.FromArgb(30, 30, 30);
             _output.Font = new Font("Consolas", 9.0f);
             _output.BorderStyle = BorderStyle.None;
-            var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(30, 30, 30) };
+            var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248, 249, 252) };
             var outputHeader = SectionLabel("OUTPUT / COMPILATION");
-            outputHeader.BackColor = Color.FromArgb(0, 122, 204);
+            outputHeader.BackColor = Color.FromArgb(83, 102, 153);
             outputHeader.ForeColor = Color.White;
             outputHeader.Dock = DockStyle.Top;
             outputHeader.Height = 25;
@@ -223,7 +223,7 @@ namespace ArduinoStudio7
             split.Panel2.Controls.Add(lower);
 
             // Долна синя статусна лента, вдъхновена от Visual Studio.
-            var status = new StatusStrip { BackColor = Color.FromArgb(0, 122, 204), ForeColor = Color.White, SizingGrip = false };
+            var status = new StatusStrip { BackColor = Color.FromArgb(83, 102, 153), ForeColor = Color.White, SizingGrip = false };
             status.Items.Add(new ToolStripStatusLabel("Arduino Studio 7"));
             status.Items.Add(new ToolStripStatusLabel(" | Arduino / C++ |"));
             status.Items.Add(new ToolStripStatusLabel(" Готово"));
@@ -251,21 +251,21 @@ namespace ArduinoStudio7
         // Цветова таблица за синьо-графитова тема, вдъхновена от Visual Studio.
         private sealed class ArduinoColorTable : ProfessionalColorTable
         {
-            public override Color ToolStripGradientBegin { get { return Color.FromArgb(45, 45, 48); } }
-            public override Color ToolStripGradientMiddle { get { return Color.FromArgb(45, 45, 48); } }
-            public override Color ToolStripGradientEnd { get { return Color.FromArgb(45, 45, 48); } }
-            public override Color MenuStripGradientBegin { get { return Color.FromArgb(37, 37, 38); } }
-            public override Color MenuStripGradientEnd { get { return Color.FromArgb(37, 37, 38); } }
-            public override Color MenuItemSelected { get { return Color.FromArgb(62, 62, 66); } }
-            public override Color MenuItemBorder { get { return Color.FromArgb(0, 122, 204); } }
-            public override Color MenuItemSelectedGradientBegin { get { return Color.FromArgb(0, 122, 204); } }
-            public override Color MenuItemSelectedGradientEnd { get { return Color.FromArgb(0, 122, 204); } }
-            public override Color MenuItemPressedGradientBegin { get { return Color.FromArgb(0, 90, 158); } }
-            public override Color MenuItemPressedGradientMiddle { get { return Color.FromArgb(0, 90, 158); } }
-            public override Color MenuItemPressedGradientEnd { get { return Color.FromArgb(0, 90, 158); } }
-            public override Color ToolStripBorder { get { return Color.FromArgb(65, 65, 68); } }
-            public override Color SeparatorDark { get { return Color.FromArgb(80, 80, 84); } }
-            public override Color SeparatorLight { get { return Color.FromArgb(45, 45, 48); } }
+            public override Color ToolStripGradientBegin { get { return Color.FromArgb(238, 242, 250); } }
+            public override Color ToolStripGradientMiddle { get { return Color.FromArgb(238, 242, 250); } }
+            public override Color ToolStripGradientEnd { get { return Color.FromArgb(238, 242, 250); } }
+            public override Color MenuStripGradientBegin { get { return Color.FromArgb(238, 242, 250); } }
+            public override Color MenuStripGradientEnd { get { return Color.FromArgb(238, 242, 250); } }
+            public override Color MenuItemSelected { get { return Color.FromArgb(215, 228, 248); } }
+            public override Color MenuItemBorder { get { return Color.FromArgb(120, 150, 205); } }
+            public override Color MenuItemSelectedGradientBegin { get { return Color.FromArgb(215, 228, 248); } }
+            public override Color MenuItemSelectedGradientEnd { get { return Color.FromArgb(215, 228, 248); } }
+            public override Color MenuItemPressedGradientBegin { get { return Color.FromArgb(198, 216, 243); } }
+            public override Color MenuItemPressedGradientMiddle { get { return Color.FromArgb(198, 216, 243); } }
+            public override Color MenuItemPressedGradientEnd { get { return Color.FromArgb(198, 216, 243); } }
+            public override Color ToolStripBorder { get { return Color.FromArgb(190, 200, 218); } }
+            public override Color SeparatorDark { get { return Color.FromArgb(190, 200, 218); } }
+            public override Color SeparatorLight { get { return Color.FromArgb(248, 249, 252); } }
         }
 
         private string AskText(string title, string prompt, string initialValue)
@@ -342,7 +342,7 @@ namespace ArduinoStudio7
         {
             // Етикет за заглавията на панелите.
             return new Label { Text = text, Dock = DockStyle.Top, Height = 25, TextAlign = ContentAlignment.MiddleLeft,
-                BackColor = Color.FromArgb(45,45,48), ForeColor = Color.Gainsboro, Padding = new Padding(7,0,0,0) };
+                BackColor = Color.FromArgb(238, 242, 250), ForeColor = Color.FromArgb(30, 30, 30), Padding = new Padding(7,0,0,0) };
         }
 
         private void NewSketch()
