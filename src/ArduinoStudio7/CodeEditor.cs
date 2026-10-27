@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace ArduinoStudio7
 {
-    // Редактор с тъмен изглед, оцветяване и локални подсказки без външни библиотеки.
+    // Редактор в светлата цветова схема на Visual Studio 2019, с оцветяване и подсказки.
     public sealed class CodeEditor : RichTextBox
     {
         // Win32 съобщения за запазване на видимия ред при оцветяване.
@@ -58,9 +58,9 @@ namespace ArduinoStudio7
             // Контекстно меню с често използвани команди за редактиране.
             var editorMenu = new ContextMenuStrip
             {
-                BackColor = Color.FromArgb(37, 37, 38),
-                ForeColor = Color.WhiteSmoke,
-                Renderer = new ToolStripProfessionalRenderer()
+                BackColor = Color.FromArgb(248, 249, 252), // Светъл фон на контекстното меню.
+                ForeColor = Color.FromArgb(30, 30, 30), // Тъмен текст за добра четимост.
+                Renderer = new ToolStripProfessionalRenderer(new EditorColorTable())
             };
             editorMenu.Items.Add("Изрежи", null, (s, e) => Cut());
             editorMenu.Items.Add("Копирай", null, (s, e) => Copy());
@@ -73,6 +73,24 @@ namespace ArduinoStudio7
             editorMenu.Items.Add("Към дефиницията  Ctrl+щракване", null, (s, e) => NavigateFromCaret());
             ContextMenuStrip = editorMenu;
             Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
+        }
+
+        // Цветове на контекстното меню — светлосиньо маркиране като във Visual Studio 2019.
+        private sealed class EditorColorTable : ProfessionalColorTable
+        {
+            public override Color ToolStripGradientBegin { get { return Color.FromArgb(248, 249, 252); } }
+            public override Color ToolStripGradientMiddle { get { return Color.FromArgb(248, 249, 252); } }
+            public override Color ToolStripGradientEnd { get { return Color.FromArgb(248, 249, 252); } }
+            public override Color MenuItemSelected { get { return Color.FromArgb(215, 228, 248); } }
+            public override Color MenuItemBorder { get { return Color.FromArgb(120, 150, 205); } }
+            public override Color MenuItemSelectedGradientBegin { get { return Color.FromArgb(215, 228, 248); } }
+            public override Color MenuItemSelectedGradientEnd { get { return Color.FromArgb(215, 228, 248); } }
+            public override Color MenuItemPressedGradientBegin { get { return Color.FromArgb(198, 216, 243); } }
+            public override Color MenuItemPressedGradientMiddle { get { return Color.FromArgb(198, 216, 243); } }
+            public override Color MenuItemPressedGradientEnd { get { return Color.FromArgb(198, 216, 243); } }
+            public override Color ToolStripBorder { get { return Color.FromArgb(190, 200, 218); } }
+            public override Color SeparatorDark { get { return Color.FromArgb(190, 200, 218); } }
+            public override Color SeparatorLight { get { return Color.FromArgb(248, 249, 252); } }
         }
 
         private void HighlightSyntax()
