@@ -57,8 +57,23 @@ namespace ArduinoStudio7
             var toolsMenu = new ToolStripMenuItem("Инструменти");
             toolsMenu.DropDownItems.Add("Настройки на Arduino CLI...", null, (s, e) => ChooseCli());
             toolsMenu.DropDownItems.Add("Справка за платките...", null, (s, e) => ShowBoardHelp());
-            menu.Items.AddRange(new ToolStripItem[] { fileMenu, buildMenu, toolsMenu });
+            // Меню за редактиране, търсене и навигация в кода.
+            var editMenu = new ToolStripMenuItem("Редактиране");
+            editMenu.DropDownItems.Add("Намери следващо...   Ctrl+F", null, (s, e) => FindInEditor());
+            editMenu.DropDownItems.Add("Замени всички...", null, (s, e) => ReplaceInEditor());
+            editMenu.DropDownItems.Add("Отиди на ред...   Ctrl+G", null, (s, e) => GoToEditorLine());
+            editMenu.DropDownItems.Add(new ToolStripSeparator());
+            editMenu.DropDownItems.Add("Коментирай / разкоментирай   Ctrl+/", null, (s, e) => _editor.ToggleCommentSelection());
+            menu.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, buildMenu, toolsMenu });
             MainMenuStrip = menu;
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                // Клавишните комбинации за редактора работят и когато фокусът е в кода.
+                if (e.Control && e.KeyCode == Keys.F) { e.SuppressKeyPress = true; FindInEditor(); }
+                else if (e.Control && e.KeyCode == Keys.H) { e.SuppressKeyPress = true; ReplaceInEditor(); }
+                else if (e.Control && e.KeyCode == Keys.G) { e.SuppressKeyPress = true; GoToEditorLine(); }
+            };
 
             // Лента с действия, платка и сериен порт.
             var toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(245, 245, 245), ForeColor = Color.FromArgb(30, 30, 30), RenderMode = ToolStripRenderMode.System };
@@ -192,6 +207,69 @@ namespace ArduinoStudio7
                 if (rightTools.Height > 300)
                     rightTools.SplitterDistance = Math.Max(rightTools.Panel1MinSize, Math.Min((int)(rightTools.Height * 0.68), rightTools.Height - rightTools.Panel2MinSize - rightTools.SplitterWidth));
             };
+        }
+
+        private string AskText(string title, string prompt, string initialValue)
+        {
+            // Малък диалог без допълнителни библиотеки за търсене и навигация.
+            using (var dialog = new Form())
+            using (var label = new Label())
+            using (var input = new TextBox())
+            using (var ok = new Button())
+            using (var cancel = new Button())
+            {
+                dialog.Text = title;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.ClientSize = new Size(390, 112);
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowInTaskbar = false;
+                label.Text = prompt;
+                label.SetBounds(12, 10, 366, 20);
+                input.Text = initialValue ?? "";
+                input.SetBounds(12, 34, 366, 24);
+                ok.Text = "OK";
+                ok.DialogResult = DialogResult.OK;
+                ok.SetBounds(222, 72, 75, 28);
+                cancel.Text = "Отказ";
+                cancel.DialogResult = DialogResult.Cancel;
+                cancel.SetBounds(303, 72, 75, 28);
+                dialog.Controls.AddRange(new Control[] { label, input, ok, cancel });
+                dialog.AcceptButton = ok;
+                dialog.CancelButton = cancel;
+                return dialog.ShowDialog(this) == DialogResult.OK ? input.Text : null;
+            }
+        }
+
+        private void FindInEditor()
+        {
+            // Търсим текста от текущата позиция и продължаваме от началото.
+            string query = AskText("Намери", "Текст за търсене:", "");
+            if (query == null) return;
+            if (!_editor.FindNext(query))
+                MessageBox.Show(this, "Текстът не е намерен.", "Намери", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ReplaceInEditor()
+        {
+            // Замяна на всички срещания на зададения текст.
+            string query = AskText("Замени", "Текст, който да се търси:", "");
+            if (String.IsNullOrEmpty(query)) return;
+            string replacement = AskText("Замени", "Замени с:", "");
+            if (replacement == null) return;
+            int count = _editor.ReplaceAllText(query, replacement);
+            Log("Замяна: " + count + " срещания.");
+        }
+
+        private void GoToEditorLine()
+        {
+            // Придвижваме редактора до посочен номер на ред.
+            string value = AskText("Отиди на ред", "Номер на ред:", "1");
+            int line;
+            if (value == null) return;
+            if (!Int32.TryParse(value, out line) || !_editor.GoToLine(line))
+                MessageBox.Show(this, "Въведете валиден номер на ред.", "Отиди на ред", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private ToolStripButton Button(string text, EventHandler action)
