@@ -447,12 +447,31 @@ namespace ArduinoStudio7
             root.Expand(); _projectTree.Nodes.Add(root);
         }
 
+        // Откриваме копие на LiquidCrystal.cpp в самата папка на скеча.
+        // Ако то е там заедно с инсталираната библиотека, линкерът получава двойни дефиниции.
+        private bool CheckDuplicateLibrarySources(string sketchFolder)
+        {
+            string duplicate = Directory.GetFiles(sketchFolder, "*.cpp", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(path => String.Equals(Path.GetFileName(path), "LiquidCrystal.cpp", StringComparison.OrdinalIgnoreCase));
+
+            if (duplicate == null) return true;
+
+            Log("Грешка: дублиран източник на LiquidCrystal: " + duplicate);
+            Log("Инсталираната библиотека също съдържа LiquidCrystal.cpp, затова компилацията би дала multiple definition.");
+            Log("Ако файлът е копие на библиотеката, преместете LiquidCrystal.cpp (и евентуално LiquidCrystal.h) извън папката на скеча.");
+            MessageBox.Show(this,
+                "В папката на скеча има LiquidCrystal.cpp. Arduino CLI компилира и този файл, и инсталираната библиотека, което причинява multiple definition.\n\nАко файлът е копие на библиотеката, преместете LiquidCrystal.cpp и евентуалния LiquidCrystal.h извън папката на скеча. После опитайте отново.",
+                "Дублирана библиотека", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
         private void CompileSketch()
         {
             // Записваме промените и подаваме папката на скеча към Arduino CLI.
             SaveFile();
             if (String.IsNullOrEmpty(_currentFile) || !File.Exists(_currentFile)) return;
             string sketchFolder = Path.GetDirectoryName(_currentFile);
+            if (!CheckDuplicateLibrarySources(sketchFolder)) return;
             if (!Directory.GetFiles(sketchFolder, "*.ino", SearchOption.TopDirectoryOnly).Any())
             {
                 Log("Грешка: Arduino CLI очаква .ino файл в папката на скеча.");
