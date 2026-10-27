@@ -45,8 +45,10 @@ namespace ArduinoStudio7
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-                process.WaitForExit();
+                process.WaitForExit(); // Изчакваме процеса да приключи.
+                process.WaitForExit(); // Изчакваме и последните асинхронни редове от stdout/stderr.
                 output("Arduino CLI завърши с код: " + process.ExitCode);
+                if (process.ExitCode != 0) output("Компилацията/командата е неуспешна. Проверете грешките по-горе.");
                 return process.ExitCode.ToString();
             }
         }
