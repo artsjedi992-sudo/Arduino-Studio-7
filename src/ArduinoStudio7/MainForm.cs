@@ -477,7 +477,10 @@ namespace ArduinoStudio7
                 Log("Грешка: Arduino CLI очаква .ino файл в папката на скеча.");
                 return;
             }
-            RunCli("compile --fqbn " + Quote(_board.Text.Trim()) + " " + Quote(sketchFolder), sketchFolder);
+            // Записваме компилираните файлове в същата папка, където е .ino файлът.
+            // Така HEX файлът се намира непосредствено до проекта и не се губи в отделна build папка.
+            RunCli("compile --fqbn " + Quote(_board.Text.Trim()) + " --output-dir " + Quote(sketchFolder) + " " + Quote(sketchFolder), sketchFolder);
+            Log("Изходните файлове и HEX се записват в папката на скеча: " + sketchFolder);
         }
 
         private void UploadSketch()
