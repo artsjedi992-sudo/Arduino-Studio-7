@@ -269,11 +269,32 @@ namespace ArduinoStudio7
             split.Panel1.Controls.Add(upper);
             split.Panel2.Controls.Add(lower);
 
-            // Долна синя статусна лента, вдъхновена от Visual Studio.
+            // Долна статусна лента с текущ ред, колона и размер на документа.
             var status = new StatusStrip { BackColor = Color.FromArgb(83, 102, 153), ForeColor = Color.White, SizingGrip = false };
-            status.Items.Add(new ToolStripStatusLabel("Arduino Studio 7"));
-            status.Items.Add(new ToolStripStatusLabel(" | Arduino / C++ |"));
-            status.Items.Add(new ToolStripStatusLabel(" Готово"));
+            var statusName = new ToolStripStatusLabel("Arduino Studio 7");
+            var statusLanguage = new ToolStripStatusLabel(" | Arduino / C++ |");
+            var statusPosition = new ToolStripStatusLabel("Ред 1, колона 1");
+            var statusLength = new ToolStripStatusLabel("Символи: 0");
+            var statusReady = new ToolStripStatusLabel("Готово") { Spring = true, TextAlign = ContentAlignment.MiddleRight };
+            status.Items.Add(statusName);
+            status.Items.Add(statusLanguage);
+            status.Items.Add(new ToolStripStatusLabel("|"));
+            status.Items.Add(statusPosition);
+            status.Items.Add(new ToolStripStatusLabel("|"));
+            status.Items.Add(statusLength);
+            status.Items.Add(statusReady);
+
+            // Обновяваме информацията веднага при движение на курсора или промяна на текста.
+            Action updateEditorStatus = () =>
+            {
+                int line = _editor.GetLineFromCharIndex(_editor.SelectionStart);
+                int lineStart = _editor.GetFirstCharIndexFromLine(line);
+                statusPosition.Text = "Ред " + (line + 1) + ", колона " + (_editor.SelectionStart - Math.Max(0, lineStart) + 1);
+                statusLength.Text = "Символи: " + _editor.TextLength;
+            };
+            _editor.SelectionChanged += (s, e) => updateEditorStatus();
+            _editor.TextChanged += (s, e) => updateEditorStatus();
+            updateEditorStatus();
 
             Controls.Add(split);
             Controls.Add(toolbar);
