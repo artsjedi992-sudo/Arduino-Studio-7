@@ -71,15 +71,30 @@ namespace ArduinoStudio7
                 ForeColor = Color.FromArgb(30, 30, 30), // Тъмен текст за добра четимост.
                 Renderer = new ToolStripProfessionalRenderer(new EditorColorTable())
             };
+            // Основни команди за редактиране — с проверка дали има действие за Undo/Redo.
+            editorMenu.Items.Add("Отмени  Ctrl+Z", null, (s, e) => { if (CanUndo) Undo(); });
+            editorMenu.Items.Add("Повтори  Ctrl+Y", null, (s, e) => { if (CanRedo) Redo(); });
+            editorMenu.Items.Add(new ToolStripSeparator());
             editorMenu.Items.Add("Изрежи", null, (s, e) => Cut());
             editorMenu.Items.Add("Копирай", null, (s, e) => Copy());
             editorMenu.Items.Add("Постави", null, (s, e) => Paste());
             editorMenu.Items.Add("Избери всичко", null, (s, e) => SelectAll());
+            editorMenu.Items.Add("Избери текущия ред", null, (s, e) => SelectCurrentLine());
             editorMenu.Items.Add(new ToolStripSeparator());
             editorMenu.Items.Add("Дублирай ред / избор  Ctrl+D", null, (s, e) => DuplicateCurrentLineOrSelection());
-            editorMenu.Items.Add("Коментирай / разкоментирай", null, (s, e) => ToggleCommentSelection());
-            editorMenu.Items.Add("Намери в кода", null, (s, e) => RequestFind());
+            editorMenu.Items.Add("Коментирай / разкоментирай  Ctrl+/", null, (s, e) => ToggleCommentSelection());
+            editorMenu.Items.Add("Намери в кода  Ctrl+F", null, (s, e) => RequestFind());
+            editorMenu.Items.Add("Към ред…  Ctrl+G", null, (s, e) => PromptGoToLine());
             editorMenu.Items.Add("Към дефиницията  Ctrl+щракване", null, (s, e) => NavigateFromCaret());
+            // Подменю с често използвани Arduino/C++ конструкции.
+            var templates = new ToolStripMenuItem("Вмъкни шаблон");
+            templates.DropDownItems.Add("setup() и loop()", null, (s, e) => InsertTemplate("void setup()\r\n{\r\n    // Инициализация\r\n}\r\n\r\nvoid loop()\r\n{\r\n    // Основен цикъл\r\n}\r\n"));
+            templates.DropDownItems.Add("if / else", null, (s, e) => InsertTemplate("if (условие)\r\n{\r\n    \r\n}\r\nelse\r\n{\r\n    \r\n}\r\n"));
+            templates.DropDownItems.Add("for цикъл", null, (s, e) => InsertTemplate("for (int i = 0; i < 10; i++)\r\n{\r\n    \r\n}\r\n"));
+            templates.DropDownItems.Add("Serial.begin(9600)", null, (s, e) => InsertTemplate("Serial.begin(9600);"));
+            templates.DropDownItems.Add("pinMode()", null, (s, e) => InsertTemplate("pinMode(LED_BUILTIN, OUTPUT);"));
+            templates.DropDownItems.Add("digitalWrite()", null, (s, e) => InsertTemplate("digitalWrite(LED_BUILTIN, HIGH);"));
+            editorMenu.Items.Add(templates);
             ContextMenuStrip = editorMenu;
             Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
         }
@@ -190,7 +205,7 @@ namespace ArduinoStudio7
             if (e.Control && e.KeyCode == Keys.A) { SelectAll(); e.SuppressKeyPress = true; return; }
             // Ctrl+Z / Ctrl+Y използват стандартната undo/redo поддръжка на RichTextBox.
             if (e.Control && e.KeyCode == Keys.Z) { Undo(); e.SuppressKeyPress = true; return; }
-            if (e.Control && e.KeyCode == Keys.Y) { e.SuppressKeyPress = true; return; }
+            if (e.Control && e.KeyCode == Keys.Y) { if (CanRedo) Redo(); e.SuppressKeyPress = true; return; }
 
             // Ctrl+D дублира текущия ред или избрания блок код.
             if (e.Control && e.KeyCode == Keys.D)
@@ -212,6 +227,59 @@ namespace ArduinoStudio7
                 e.SuppressKeyPress = true;
                 ToggleCommentSelection();
             }
+        }
+
+        // Маркира целия ред под курсора, включително крайния нов ред, ако съществува.
+        private void SelectCurrentLine()
+        {
+            int line = GetLineFromCharIndex(SelectionStart);
+            int start = GetFirstCharIndexFromLine(line);
+            if (start < 0) return;
+            int end = line + 1 < Lines.Length ? GetFirstCharIndexFromLine(line + 1) : TextLength;
+            Select(start, Math.Max(0, end - start));
+            Focus();
+        }
+
+        // Показва малък диалог за преход към конкретен ред, без външни библиотеки.
+        private void PromptGoToLine()
+        {
+            using (Form dialog = new Form())
+            using (Label label = new Label())
+            using (NumericUpDown number = new NumericUpDown())
+            using (Button go = new Button())
+            using (Button cancel = new Button())
+            {
+                dialog.Text = "Премини към ред";
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowInTaskbar = false;
+                dialog.ClientSize = new Size(270, 105);
+                label.Text = "Номер на ред (1–" + Math.Max(1, Lines.Length) + "):";
+                label.SetBounds(12, 12, 240, 20);
+                number.SetBounds(12, 36, 110, 24);
+                number.Minimum = 1;
+                number.Maximum = Math.Max(1, Lines.Length);
+                number.Value = Math.Min(number.Maximum, GetLineFromCharIndex(SelectionStart) + 1);
+                go.Text = "Премини";
+                go.DialogResult = DialogResult.OK;
+                go.SetBounds(135, 36, 60, 26);
+                cancel.Text = "Отказ";
+                cancel.DialogResult = DialogResult.Cancel;
+                cancel.SetBounds(200, 36, 58, 26);
+                dialog.Controls.AddRange(new Control[] { label, number, go, cancel });
+                dialog.AcceptButton = go;
+                dialog.CancelButton = cancel;
+                if (dialog.ShowDialog(FindForm()) == DialogResult.OK) GoToLine((int)number.Value);
+            }
+        }
+
+        // Вмъква избран шаблон на мястото на курсора или вместо маркирания текст.
+        private void InsertTemplate(string template)
+        {
+            SelectedText = template;
+            Focus();
         }
 
         // Дублира избрания текст или целия ред, ако няма маркиран блок.
