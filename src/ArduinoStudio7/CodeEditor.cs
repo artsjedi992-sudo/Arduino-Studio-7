@@ -203,6 +203,9 @@ namespace ArduinoStudio7
 
             // Ctrl+A маркира целия код.
             if (e.Control && e.KeyCode == Keys.A) { SelectAll(); e.SuppressKeyPress = true; return; }
+            // Ctrl+F отваря търсенето, а Ctrl+G — преход към ред.
+            if (e.Control && e.KeyCode == Keys.F) { RequestFind(); e.SuppressKeyPress = true; return; }
+            if (e.Control && e.KeyCode == Keys.G) { PromptGoToLine(); e.SuppressKeyPress = true; return; }
             // Ctrl+Z / Ctrl+Y използват стандартната undo/redo поддръжка на RichTextBox.
             if (e.Control && e.KeyCode == Keys.Z) { Undo(); e.SuppressKeyPress = true; return; }
             if (e.Control && e.KeyCode == Keys.Y) { if (CanRedo) Redo(); e.SuppressKeyPress = true; return; }
