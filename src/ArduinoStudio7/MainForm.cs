@@ -70,7 +70,30 @@ namespace ArduinoStudio7
             editMenu.DropDownItems.Add(new ToolStripSeparator());
             editMenu.DropDownItems.Add("Дублирай ред / избран текст   Ctrl+D", null, (s, e) => _editor.DuplicateCurrentLineOrSelection());
             editMenu.DropDownItems.Add("Коментирай / разкоментирай   Ctrl+/", null, (s, e) => _editor.ToggleCommentSelection());
-            menu.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, buildMenu, toolsMenu });
+            // Меню „Проект“ събира операции върху папката и файловете в нея.
+            var projectMenu = new ToolStripMenuItem("Проект");
+            projectMenu.DropDownItems.Add("Отвори папка на проекта...", null, (s, e) => OpenProjectFolder());
+            projectMenu.DropDownItems.Add("Обнови дървото на проекта", null, (s, e) => RefreshProjectTree());
+            projectMenu.DropDownItems.Add(new ToolStripSeparator());
+            projectMenu.DropDownItems.Add("Нов .ino файл...", null, (s, e) => CreateProjectFile(".ino"));
+            projectMenu.DropDownItems.Add("Нов C++ файл...", null, (s, e) => CreateProjectFile(".cpp"));
+            projectMenu.DropDownItems.Add("Нов заглавен файл (.h)...", null, (s, e) => CreateProjectFile(".h"));
+            projectMenu.DropDownItems.Add(new ToolStripSeparator());
+            projectMenu.DropDownItems.Add("Отвори папката във File Explorer", null, (s, e) => OpenProjectFolderInExplorer());
+            projectMenu.DropDownItems.Add("Компилирай проекта", null, (s, e) => CompileSketch());
+            projectMenu.DropDownItems.Add("Качи към платката", null, (s, e) => UploadSketch());
+
+            var windowMenu = new ToolStripMenuItem("Прозорец");
+            windowMenu.DropDownItems.Add("Изчисти изхода", null, (s, e) => { _output.Clear(); Log("Изходът е изчистен."); });
+            windowMenu.DropDownItems.Add("Запази изхода във файл...", null, (s, e) => SaveOutputToFile());
+            windowMenu.DropDownItems.Add("Копирай целия изход", null, (s, e) => { if (_output.TextLength > 0) Clipboard.SetText(_output.Text); });
+
+            var helpMenu = new ToolStripMenuItem("Помощ");
+            helpMenu.DropDownItems.Add("Платки и FQBN...", null, (s, e) => ShowBoardHelp());
+            helpMenu.DropDownItems.Add("За Arduino Studio 7", null, (s, e) =>
+                MessageBox.Show(this, "Arduino Studio 7\\nСреда за редактиране, компилиране и качване на Arduino скечове.\\n\\nКомпилираните HEX файлове се записват в папката на скеча.", "За програмата", MessageBoxButtons.OK, MessageBoxIcon.Information));
+
+            menu.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, projectMenu, buildMenu, toolsMenu, windowMenu, helpMenu });
             MainMenuStrip = menu;
             KeyPreview = true;
             KeyDown += (s, e) =>
@@ -147,6 +170,15 @@ namespace ArduinoStudio7
                 if (_projectTree.SelectedNode != null && _projectTree.SelectedNode.Tag is string)
                     Clipboard.SetText((string)_projectTree.SelectedNode.Tag);
             });
+            treeMenu.Items.Add(new ToolStripSeparator());
+            treeMenu.Items.Add("Нов .ino файл в проекта...", null, (s, e) => CreateProjectFile(".ino"));
+            treeMenu.Items.Add("Нов C++ файл в проекта...", null, (s, e) => CreateProjectFile(".cpp"));
+            treeMenu.Items.Add("Нов заглавен файл (.h)...", null, (s, e) => CreateProjectFile(".h"));
+            treeMenu.Items.Add(new ToolStripSeparator());
+            treeMenu.Items.Add("Компилирай проекта", null, (s, e) => CompileSketch());
+            treeMenu.Items.Add("Качи към платката", null, (s, e) => UploadSketch());
+            treeMenu.Items.Add("Отвори във File Explorer", null, (s, e) => OpenSelectedPathInExplorer());
+            treeMenu.Items.Add("Изтрий избрания файл...", null, (s, e) => DeleteSelectedProjectFile());
             _projectTree.ContextMenuStrip = treeMenu;
             _projectTree.NodeMouseClick += (s, e) =>
             {
@@ -205,6 +237,19 @@ namespace ArduinoStudio7
             _output.ForeColor = Color.FromArgb(30, 30, 30);
             _output.Font = new Font("Consolas", 9.0f);
             _output.BorderStyle = BorderStyle.None;
+            // Контекстно меню на изхода за копиране и запазване на съобщенията.
+            var outputMenu = new ContextMenuStrip
+            {
+                BackColor = Color.FromArgb(248, 249, 252),
+                ForeColor = Color.FromArgb(30, 30, 30),
+                Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable())
+            };
+            outputMenu.Items.Add("Копирай избраното", null, (s, e) => { if (_output.SelectionLength > 0) Clipboard.SetText(_output.SelectedText); });
+            outputMenu.Items.Add("Копирай целия изход", null, (s, e) => { if (_output.TextLength > 0) Clipboard.SetText(_output.Text); });
+            outputMenu.Items.Add(new ToolStripSeparator());
+            outputMenu.Items.Add("Изчисти изхода", null, (s, e) => _output.Clear());
+            outputMenu.Items.Add("Запази изхода във файл...", null, (s, e) => SaveOutputToFile());
+            _output.ContextMenuStrip = outputMenu;
             var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248, 249, 252) };
             var outputHeader = SectionLabel("OUTPUT / COMPILATION");
             outputHeader.BackColor = Color.FromArgb(83, 102, 153);
@@ -414,6 +459,92 @@ namespace ArduinoStudio7
                     Text = "Arduino Studio 7 — " + Path.GetFileName(_currentFile);
                     RefreshProjectTree(); Log("Записан: " + _currentFile);
                 }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при запис", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            }
+        }
+
+        // Създаваме допълнителен файл в папката на проекта.
+        private void CreateProjectFile(string extension)
+        {
+            if (String.IsNullOrEmpty(_projectFolder) || !Directory.Exists(_projectFolder))
+            {
+                MessageBox.Show(this, "Първо запишете скеча или отворете папка на проект.", "Няма отворен проект",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            string suggested = extension == ".ino" ? "ДопълнителенСкеч" : (extension == ".h" ? "MyHeader" : "MySource");
+            string name = AskText("Нов файл", "Име на файла (без разширение):", suggested);
+            if (String.IsNullOrWhiteSpace(name)) return;
+            name = Path.GetFileNameWithoutExtension(name.Trim());
+            if (String.IsNullOrWhiteSpace(name)) return;
+            string path = Path.Combine(_projectFolder, name + extension);
+            if (File.Exists(path))
+            {
+                MessageBox.Show(this, "Файлът вече съществува:\\n" + path, "Нов файл", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            try
+            {
+                string starter = extension == ".ino" ? "// Допълнителен Arduino скеч.\\n\\n" :
+                    (extension == ".h" ? "#pragma once\\n\\n// Декларации за проекта.\\n" : "// C++ изходен файл за Arduino проекта.\\n\\n");
+                File.WriteAllText(path, starter);
+                Log("Създаден файл: " + path);
+                RefreshProjectTree();
+                if (extension != ".ino") LoadFile(path);
+            }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при създаване на файл", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        // Отваряме папката на проекта във File Explorer.
+        private void OpenProjectFolderInExplorer()
+        {
+            if (!String.IsNullOrEmpty(_projectFolder) && Directory.Exists(_projectFolder))
+                System.Diagnostics.Process.Start("explorer.exe", Quote(_projectFolder));
+            else MessageBox.Show(this, "Няма отворена папка на проект.", "Проект", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // Отваряме местоположението на избрания файл или папка.
+        private void OpenSelectedPathInExplorer()
+        {
+            if (_projectTree.SelectedNode == null) return;
+            string path = _projectTree.SelectedNode.Tag as string;
+            if (String.IsNullOrEmpty(path)) return;
+            string target = File.Exists(path) ? Path.GetDirectoryName(path) : path;
+            if (Directory.Exists(target)) System.Diagnostics.Process.Start("explorer.exe", Quote(target));
+        }
+
+        // Изтриването е само за файл и винаги изисква потвърждение.
+        private void DeleteSelectedProjectFile()
+        {
+            if (_projectTree.SelectedNode == null) return;
+            string path = _projectTree.SelectedNode.Tag as string;
+            if (String.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                MessageBox.Show(this, "Изберете файл, а не папка.", "Изтриване", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (String.Equals(path, _currentFile, StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(this, "Не може да изтриете отворения файл. Отворете друг файл първо.",
+                    "Изтриване", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (MessageBox.Show(this, "Наистина ли да изтриете файла?\\n\\n" + path, "Потвърждение",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            try { File.Delete(path); RefreshProjectTree(); Log("Изтрит файл: " + path); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при изтриване", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        // Записваме логовете от компилацията във файл за диагностика.
+        private void SaveOutputToFile()
+        {
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = "Запази изхода";
+                dialog.Filter = "Текстов файл (*.txt)|*.txt|Всички файлове (*.*)|*.*";
+                dialog.FileName = "ArduinoStudio7-output.txt";
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                try { File.WriteAllText(dialog.FileName, _output.Text); }
                 catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при запис", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             }
         }
