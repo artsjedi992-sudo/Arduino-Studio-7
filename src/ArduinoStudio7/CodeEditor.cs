@@ -30,6 +30,7 @@ namespace ArduinoStudio7
         private bool _hintVisible = false;
         private readonly Timer _highlightTimer = new Timer();
         private readonly ContextMenuStrip _completionMenu = new ContextMenuStrip();
+        private readonly HashSet<int> _bookmarks = new HashSet<int>(); // Отметки редове за навигация в текущия файл.
         private readonly HashSet<string> _keywords = new HashSet<string>(StringComparer.Ordinal)
         {
             "void","bool","boolean","byte","char","unsigned","signed","short","int","long","float","double",
@@ -86,6 +87,12 @@ namespace ArduinoStudio7
             editorMenu.Items.Add("Намери в кода  Ctrl+F", null, (s, e) => RequestFind());
             editorMenu.Items.Add("Към ред…  Ctrl+G", null, (s, e) => PromptGoToLine());
             editorMenu.Items.Add("Към дефиницията  Ctrl+щракване", null, (s, e) => NavigateFromCaret());
+            editorMenu.Items.Add("Постави / махни отметка  Ctrl+F2", null, (s, e) => ToggleBookmark());
+            editorMenu.Items.Add("Следваща отметка  F2", null, (s, e) => NextBookmark());
+            editorMenu.Items.Add("Изчисти отметките", null, (s, e) => ClearBookmarks());
+            editorMenu.Items.Add("Отстъпи избраните редове  Tab", null, (s, e) => IndentSelection(true));
+            editorMenu.Items.Add("Прибери избраните редове  Shift+Tab", null, (s, e) => IndentSelection(false));
+            editorMenu.Items.Add("Огради с /* ... */", null, (s, e) => ToggleBlockComment());
             // Подменю с често използвани Arduino/C++ конструкции.
             var templates = new ToolStripMenuItem("Вмъкни шаблон");
             templates.DropDownItems.Add("setup() и loop()", null, (s, e) => InsertTemplate("void setup()\r\n{\r\n    // Инициализация\r\n}\r\n\r\nvoid loop()\r\n{\r\n    // Основен цикъл\r\n}\r\n"));
@@ -232,6 +239,11 @@ namespace ArduinoStudio7
                 return;
             }
 
+            // Ctrl+F2 поставя/премахва отметка, F2 преминава към следващата.
+            if (e.Control && e.KeyCode == Keys.F2) { e.SuppressKeyPress = true; ToggleBookmark(); return; }
+            if (!e.Control && e.KeyCode == Keys.F2) { e.SuppressKeyPress = true; NextBookmark(); return; }
+            // Tab/Shift+Tab отстъпва или прибира маркиран блок код.
+            if (e.KeyCode == Keys.Tab && SelectionLength > 0) { e.SuppressKeyPress = true; IndentSelection(!e.Shift); return; }
             // Ctrl+Up / Ctrl+Down мести реда, без да го копира.
             if (e.Control && e.KeyCode == Keys.Up) { e.SuppressKeyPress = true; MoveCurrentLine(-1); return; }
             if (e.Control && e.KeyCode == Keys.Down) { e.SuppressKeyPress = true; MoveCurrentLine(1); return; }
@@ -620,6 +632,61 @@ namespace ArduinoStudio7
         public void InsertDateTime()
         {
             SelectedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+
+        // Поставя или маха отметка на текущия ред; отметките са отделни за всеки отворен файл.
+        public void ToggleBookmark()
+        {
+            int line = GetLineFromCharIndex(SelectionStart);
+            if (!_bookmarks.Add(line)) _bookmarks.Remove(line);
+            _bookmarks.RemoveWhere(n => n < 0 || n >= Lines.Length);
+        }
+
+        // Преминава към следващата отметка и започва от първата след края.
+        public bool NextBookmark()
+        {
+            _bookmarks.RemoveWhere(n => n < 0 || n >= Lines.Length);
+            if (_bookmarks.Count == 0) { MessageBox.Show(this, "Няма отметки в този файл.", "Отметки", MessageBoxButtons.OK, MessageBoxIcon.Information); return false; }
+            int current = GetLineFromCharIndex(SelectionStart);
+            int next = _bookmarks.Where(n => n > current).DefaultIfEmpty(_bookmarks.Min()).Min();
+            return GoToLine(next + 1);
+        }
+
+        // Изтрива всички отметки в текущия редактор.
+        public void ClearBookmarks() { _bookmarks.Clear(); }
+
+        // Отстъпва или прибира маркираните редове, без да променя останалия текст.
+        public void IndentSelection(bool indent)
+        {
+            int startPos = SelectionStart, selectionEnd = SelectionStart + SelectionLength;
+            int first = GetLineFromCharIndex(startPos);
+            int last = GetLineFromCharIndex(Math.Max(startPos, selectionEnd - 1));
+            int start = GetFirstCharIndexFromLine(first);
+            int end = last + 1 < Lines.Length ? GetFirstCharIndexFromLine(last + 1) : TextLength;
+            if (start < 0 || end < start) return;
+            string[] lines = Text.Substring(start, end - start).Replace("\r\n", "\n").Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (indent) lines[i] = "    " + lines[i];
+                else if (lines[i].StartsWith("    ")) lines[i] = lines[i].Substring(4);
+                else if (lines[i].StartsWith("\t")) lines[i] = lines[i].Substring(1);
+            }
+            string result = String.Join(Environment.NewLine, lines);
+            Select(start, end - start); SelectedText = result;
+            Select(Math.Min(startPos + (indent ? 4 : 0), TextLength), Math.Min(selectionEnd - startPos, Math.Max(0, TextLength - startPos)));
+        }
+
+        // Обгръща маркиран код с блоков коментар или премахва вече поставените ограничители.
+        public void ToggleBlockComment()
+        {
+            int start = SelectionStart, length = SelectionLength;
+            if (length == 0) { MessageBox.Show(this, "Първо маркирайте блока код.", "Блоков коментар", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            string selected = SelectedText;
+            if (selected.StartsWith("/*") && selected.EndsWith("*/") && selected.Length >= 4)
+                SelectedText = selected.Substring(2, selected.Length - 4);
+            else SelectedText = "/*" + selected + "*/";
+            Select(start, Math.Min(TextLength - start, length + 4));
         }
 
         // Превключва визуалното пренасяне на дългите редове.
