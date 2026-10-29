@@ -152,10 +152,24 @@ namespace ArduinoStudio7
             else _highlightTimer.Start(); // Ако още няма прозоречна дръжка, оставяме таймера да го направи по-късно.
         }
 
+        // RichTextBox забавя скролирането, когато целият голям файл се форматира на хиляди отделни диапазони.
+        // При големи скечове пропускаме синтактичното оцветяване, за да останат писането и скролът плавни.
+        // По-малки файлове запазват съществуващото оцветяване.
+        private const int MaxCharsForRichTextHighlighting = 20000;
+
         private void HighlightSyntax()
         {
-            // Запазваме каретката и точната позиция на скрола преди оцветяване.
+            // Проверяваме размера преди всякакви Select/SelectionColor операции.
+            // Това е важно: при голям файл не създаваме хиляди RichTextBox форматни диапазони.
             if (TextLength == 0 || !IsHandleCreated) return;
+            if (TextLength > MaxCharsForRichTextHighlighting)
+            {
+                // Единно форматиране за големи файлове вместо скъпо оцветяване на всеки токен.
+                SelectAll();
+                SelectionColor = Color.FromArgb(30, 30, 30);
+                Select(Math.Min(SelectionStart, TextLength), 0);
+                return;
+            }
             int caret = SelectionStart;
             int selectionLength = SelectionLength;
             NativePoint scrollPosition = new NativePoint();
