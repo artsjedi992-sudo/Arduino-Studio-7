@@ -19,6 +19,9 @@ namespace ArduinoStudio7
         private bool _switchingDocument = false;
         private Action _updateEditorStatus;
         private readonly TreeView _projectTree = new TreeView();
+        private readonly TextBox _projectFilter = new TextBox();
+        private readonly Label _projectSummary = new Label();
+        private readonly ListView _projectProperties = new ListView();
         private readonly RichTextBox _output = new RichTextBox();
         private readonly ComboBox _board = new ComboBox();
         private readonly ComboBox _port = new ComboBox();
@@ -180,16 +183,37 @@ namespace ArduinoStudio7
             };
             _documents.ContextMenuStrip = tabMenu;
 
-            // Solution Explorer е вдясно, а панелът Properties е под него.
+            // Десният панел е оформен като работно пространство: бързи действия, филтър, дърво и свойства.
             _projectTree.Dock = DockStyle.Fill;
-            _projectTree.BackColor = Color.White;
-            _projectTree.ForeColor = Color.FromArgb(30, 30, 30);
+            _projectTree.BackColor = Color.FromArgb(250, 251, 254);
+            _projectTree.ForeColor = Color.FromArgb(38, 48, 68);
             _projectTree.BorderStyle = BorderStyle.None;
             _projectTree.HideSelection = false;
             _projectTree.FullRowSelect = true;
             _projectTree.ShowLines = true;
-            _projectTree.ShowRootLines = true;
-            _projectTree.LineColor = Color.FromArgb(180, 190, 205);
+            _projectTree.ShowRootLines = false;
+            _projectTree.LineColor = Color.FromArgb(205, 214, 229);
+            _projectTree.ItemHeight = 24;
+            _projectTree.DrawMode = TreeViewDrawMode.OwnerDrawText;
+            _projectTree.DrawNode += (s, e) =>
+            {
+                e.DrawDefault = false;
+                bool selected = (e.State & TreeNodeStates.Selected) != 0;
+                using (var bg = new SolidBrush(selected ? Color.FromArgb(220, 232, 252) : _projectTree.BackColor))
+                    e.Graphics.FillRectangle(bg, e.Bounds);
+                string label = e.Node.Text;
+                Color color = e.Node.Level == 0 ? Color.FromArgb(48, 91, 160) :
+                    (e.Node.Tag is string && Directory.Exists((string)e.Node.Tag) ? Color.FromArgb(65, 103, 145) :
+                    (Path.GetExtension(label).Equals(".ino", StringComparison.OrdinalIgnoreCase) ? Color.FromArgb(35, 135, 105) :
+                    (Path.GetExtension(label).Equals(".h", StringComparison.OrdinalIgnoreCase) ? Color.FromArgb(170, 105, 40) : Color.FromArgb(55, 65, 85))));
+                string prefix = e.Node.Level == 0 ? "▣  " :
+                    (e.Node.Tag is string && Directory.Exists((string)e.Node.Tag) ? "▸  " :
+                    (Path.GetExtension(label).Equals(".ino", StringComparison.OrdinalIgnoreCase) ? "●  " :
+                    (Path.GetExtension(label).Equals(".h", StringComparison.OrdinalIgnoreCase) ? "◇  " : "›  ")));
+                using (var brush = new SolidBrush(color))
+                using (var font = new Font("Segoe UI", 9.0f, e.Node.Level == 0 ? FontStyle.Bold : FontStyle.Regular))
+                    e.Graphics.DrawString(prefix + label, font, brush, e.Bounds.Left + 2, e.Bounds.Top + 3);
+            };
             _projectTree.NodeMouseDoubleClick += (s,e) => { if (e.Node.Tag is string && File.Exists((string)e.Node.Tag)) LoadFile((string)e.Node.Tag); };
             // Контекстно меню на файловете и папките в Solution Explorer.
             var treeMenu = new ContextMenuStrip
@@ -225,38 +249,77 @@ namespace ArduinoStudio7
             _projectTree.NodeMouseClick += (s, e) =>
             {
                 if (e.Button == MouseButtons.Right) _projectTree.SelectedNode = e.Node;
+                if (e.Node != null) UpdateProjectProperties(e.Node.Tag as string);
             };
+            _projectTree.AfterSelect += (s, e) => UpdateProjectProperties(e.Node == null ? null : e.Node.Tag as string);
 
-            var projectPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
-            var projectHeader = SectionLabel("SOLUTION EXPLORER");
-            projectHeader.BackColor = Color.FromArgb(83, 102, 153);
+            var projectPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(250, 251, 254), Padding = new Padding(0) };
+            var projectHeader = SectionLabel("  PROJECT EXPLORER");
+            projectHeader.BackColor = Color.FromArgb(53, 78, 125);
             projectHeader.ForeColor = Color.White;
+            projectHeader.Font = new Font("Segoe UI", 9.0f, FontStyle.Bold);
             projectHeader.Dock = DockStyle.Top;
-            projectHeader.Height = 27;
+            projectHeader.Height = 32;
+
+            var projectActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top, Height = 36, Padding = new Padding(5, 4, 3, 2),
+                WrapContents = false, AutoScroll = true, BackColor = Color.FromArgb(235, 240, 249)
+            };
+            projectActions.Controls.Add(SmallActionButton("+ .ino", (s,e) => CreateProjectFile(".ino")));
+            projectActions.Controls.Add(SmallActionButton("+ C++", (s,e) => CreateProjectFile(".cpp")));
+            projectActions.Controls.Add(SmallActionButton("+ .h", (s,e) => CreateProjectFile(".h")));
+            projectActions.Controls.Add(SmallActionButton("↻", (s,e) => RefreshProjectTree()));
+
+            var filterPanel = new Panel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(7, 5, 7, 4), BackColor = Color.FromArgb(245, 247, 252) };
+            _projectFilter.Dock = DockStyle.Fill;
+            _projectFilter.Font = new Font("Segoe UI", 9.0f);
+            _projectFilter.BorderStyle = BorderStyle.FixedSingle;
+            _projectFilter.ForeColor = Color.FromArgb(75, 85, 105);
+            _projectFilter.PlaceholderText = "Филтър по име или разширение...";
+            _projectFilter.TextChanged += (s,e) => RefreshProjectTree();
+            filterPanel.Controls.Add(_projectFilter);
+
+            _projectSummary.Dock = DockStyle.Bottom;
+            _projectSummary.Height = 25;
+            _projectSummary.TextAlign = ContentAlignment.MiddleLeft;
+            _projectSummary.Padding = new Padding(8, 0, 0, 0);
+            _projectSummary.BackColor = Color.FromArgb(235, 240, 249);
+            _projectSummary.ForeColor = Color.FromArgb(85, 98, 122);
+            _projectSummary.Font = new Font("Segoe UI", 8.0f);
+
             projectPanel.Controls.Add(_projectTree);
+            projectPanel.Controls.Add(_projectSummary);
+            projectPanel.Controls.Add(filterPanel);
+            projectPanel.Controls.Add(projectActions);
             projectPanel.Controls.Add(projectHeader);
 
-            var propertiesList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(248, 250, 253), ForeColor = Color.FromArgb(30, 30, 30) };
-            propertiesList.Columns.Add("Свойство", 115);
-            propertiesList.Columns.Add("Стойност", 130);
-            propertiesList.Items.Add(new ListViewItem(new[] { "Език", "Arduino / C++" }));
-            propertiesList.Items.Add(new ListViewItem(new[] { "Платка", _board.Text }));
-            propertiesList.Items.Add(new ListViewItem(new[] { "Редактор", "C++ код" }));
+            _projectProperties.Dock = DockStyle.Fill;
+            _projectProperties.View = View.Details;
+            _projectProperties.FullRowSelect = true;
+            _projectProperties.GridLines = false;
+            _projectProperties.BorderStyle = BorderStyle.None;
+            _projectProperties.BackColor = Color.FromArgb(248, 250, 253);
+            _projectProperties.ForeColor = Color.FromArgb(45, 55, 75);
+            _projectProperties.Font = new Font("Segoe UI", 8.5f);
+            _projectProperties.Columns.Add("Свойство", 90);
+            _projectProperties.Columns.Add("Стойност", 150);
             var propertiesPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
-            var propertiesHeader = SectionLabel("PROPERTIES");
-            propertiesHeader.BackColor = Color.FromArgb(83, 102, 153);
+            var propertiesHeader = SectionLabel("  FILE DETAILS");
+            propertiesHeader.BackColor = Color.FromArgb(67, 108, 133);
             propertiesHeader.ForeColor = Color.White;
+            propertiesHeader.Font = new Font("Segoe UI", 9.0f, FontStyle.Bold);
             propertiesHeader.Dock = DockStyle.Top;
-            propertiesHeader.Height = 27;
-            propertiesPanel.Controls.Add(propertiesList);
+            propertiesHeader.Height = 30;
+            propertiesPanel.Controls.Add(_projectProperties);
             propertiesPanel.Controls.Add(propertiesHeader);
 
             var rightTools = new SplitContainer
             {
-                Size = new Size(300, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
-                SplitterDistance = 340, Panel1MinSize = 150, Panel2MinSize = 100,
+                Size = new Size(330, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
+                SplitterDistance = 430, Panel1MinSize = 180, Panel2MinSize = 100,
                 FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
-                BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
+                BackColor = Color.FromArgb(198, 207, 222), SplitterWidth = 6
             };
             rightTools.Panel1.Controls.Add(projectPanel);
             rightTools.Panel2.Controls.Add(propertiesPanel);
