@@ -232,6 +232,14 @@ namespace ArduinoStudio7
                 return;
             }
 
+            // Ctrl+Up / Ctrl+Down мести реда, без да го копира.
+            if (e.Control && e.KeyCode == Keys.Up) { e.SuppressKeyPress = true; MoveCurrentLine(-1); return; }
+            if (e.Control && e.KeyCode == Keys.Down) { e.SuppressKeyPress = true; MoveCurrentLine(1); return; }
+            // Ctrl+Shift+W превключва пренасянето на дългите редове.
+            if (e.Control && e.Shift && e.KeyCode == Keys.W) { e.SuppressKeyPress = true; ToggleWordWrap(); return; }
+            // Ctrl+Alt+T почиства интервалите в края на всички редове.
+            if (e.Control && e.Alt && e.KeyCode == Keys.T) { e.SuppressKeyPress = true; TrimTrailingWhitespace(); return; }
+
             // Ctrl+Space показва локалните допълнения.
             if (e.Control && e.KeyCode == Keys.Space)
             {
