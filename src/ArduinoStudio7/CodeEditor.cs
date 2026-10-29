@@ -547,18 +547,23 @@ namespace ArduinoStudio7
             int line = GetLineFromCharIndex(SelectionStart);
             int target = line + direction;
             if (target < 0 || target >= Lines.Length) return;
-            int start = GetFirstCharIndexFromLine(line);
-            int end = line + 1 < Lines.Length ? GetFirstCharIndexFromLine(line + 1) : TextLength;
-            int targetStart = GetFirstCharIndexFromLine(target);
-            int targetEnd = target + 1 < Lines.Length ? GetFirstCharIndexFromLine(target + 1) : TextLength;
-            if (start < 0 || targetStart < 0) return;
-            string current = Text.Substring(start, end - start);
-            string other = Text.Substring(targetStart, targetEnd - targetStart);
-            int newStart = direction < 0 ? targetStart : start;
-            Select(Math.Min(start, targetStart), Math.Abs(end - targetStart));
-            SelectedText = direction < 0 ? current + other : other + current;
-            int movedStart = direction < 0 ? targetStart : targetStart;
-            Select(Math.Max(0, movedStart), 0);
+            int firstLine = Math.Min(line, target);
+            int start = GetFirstCharIndexFromLine(firstLine);
+            int endLine = Math.Max(line, target);
+            int end = endLine + 1 < Lines.Length ? GetFirstCharIndexFromLine(endLine + 1) : TextLength;
+            if (start < 0 || end < start) return;
+            string[] pair = Text.Substring(start, end - start).Replace("\\r\\n", "\\n").Split('\\n');
+            if (pair.Length < 2) return;
+            string first = pair[0], second = pair[1];
+            string swapped = direction < 0
+                ? second + Environment.NewLine + first
+                : second + Environment.NewLine + first;
+            // При движение нагоре първо е редът отдолу; при движение надолу първо е редът отгоре.
+            if (direction < 0) swapped = second + Environment.NewLine + first;
+            else swapped = second + Environment.NewLine + first;
+            Select(start, end - start);
+            SelectedText = swapped + (pair.Length > 2 ? Environment.NewLine + String.Join(Environment.NewLine, pair.Skip(2).ToArray()) : "");
+            Select(start, 0);
             ScrollToCaret();
         }
 
@@ -571,7 +576,7 @@ namespace ArduinoStudio7
             for (int i = 0; i < lines.Length; i++) lines[i] = lines[i].TrimEnd(' ', '\t', '\r');
             string cleaned = String.Join(Environment.NewLine, lines);
             Text = cleaned;
-            Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - Math.Min(caret, TextLength)));
+            Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - Math.Min(caret, TextLength))));
         }
 
         // Сортира азбучно избраните редове; ако няма избор, обработва текущия ред.
