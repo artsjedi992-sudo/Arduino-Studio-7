@@ -163,7 +163,7 @@ namespace ArduinoStudio7
         // ScintillaNET оцветява синтаксиса нативно; пазим стария публичен метод.
         public void RefreshSyntaxHighlighting()
         {
-            Colourise(0, -1);
+            // Scintilla автоматично преоцветява променените диапазони чрез C++ лексера.
         }
 
         // Съвместимост със стария интерфейс на командите и главния прозорец.
@@ -202,7 +202,7 @@ namespace ArduinoStudio7
         public int GetFirstCharIndexFromLine(int line)
         {
             if (line < 0 || line >= Lines.Length) return -1;
-            return PositionFromLine(line);
+            return Lines[line].Position;
         }
 
         public int GetCharIndexFromPosition(Point point)
@@ -212,7 +212,6 @@ namespace ArduinoStudio7
 
         public void ScrollToCaret()
         {
-            EnsureVisible(LineFromPosition(CurrentPosition));
             GotoPosition(CurrentPosition);
         }
 
