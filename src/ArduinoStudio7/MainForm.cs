@@ -41,6 +41,7 @@ namespace ArduinoStudio7
             BackColor = Color.FromArgb(238, 242, 250); // Светъл синьо-сив фон като Visual Studio 2019.
             ForeColor = Color.FromArgb(30, 30, 30);
             BuildInterface();
+            FormClosing += ConfirmCloseWithUnsavedDocuments;
             NewSketch();
             RefreshPorts();
         }
@@ -78,6 +79,7 @@ namespace ArduinoStudio7
             editMenu.DropDownItems.Add("Намери следващо...   Ctrl+F", null, (s, e) => FindInEditor());
             editMenu.DropDownItems.Add("Замени всички...", null, (s, e) => ReplaceInEditor());
             editMenu.DropDownItems.Add("Отиди на ред...   Ctrl+G", null, (s, e) => GoToEditorLine());
+            editMenu.DropDownItems.Add("Списък на функциите / символите", null, (s, e) => ShowCodeSymbols());
             editMenu.DropDownItems.Add(new ToolStripSeparator());
             editMenu.DropDownItems.Add("Дублирай ред / избран текст   Ctrl+D", null, (s, e) => _editor.DuplicateCurrentLineOrSelection());
             editMenu.DropDownItems.Add("Коментирай / разкоментирай   Ctrl+/", null, (s, e) => _editor.ToggleCommentSelection());
@@ -282,6 +284,7 @@ namespace ArduinoStudio7
             outputMenu.Items.Add("Изчисти изхода", null, (s, e) => _output.Clear());
             outputMenu.Items.Add("Запази изхода във файл...", null, (s, e) => SaveOutputToFile());
             _output.ContextMenuStrip = outputMenu;
+            _output.MouseDoubleClick += (s, e) => NavigateFromBuildOutput();
             var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248, 249, 252) };
             var outputHeader = SectionLabel("OUTPUT / COMPILATION");
             outputHeader.BackColor = Color.FromArgb(83, 102, 153);
@@ -489,6 +492,83 @@ namespace ArduinoStudio7
         {
             // Ctrl+S и менюто записват само активния документ.
             SaveDocument(_documents == null ? null : _documents.SelectedTab);
+        }
+
+
+        // Преди изход проверяваме всички табове и даваме възможност за запис.
+        private void ConfirmCloseWithUnsavedDocuments(object sender, FormClosingEventArgs e)
+        {
+            foreach (TabPage page in _documents.TabPages.Cast<TabPage>().ToArray())
+            {
+                if (!_tabEditors.ContainsKey(page) || _savedTexts[page] == _tabEditors[page].Text) continue;
+                _documents.SelectedTab = page;
+                DialogResult answer = MessageBox.Show(this,
+                    "Файлът \"" + page.Text.TrimEnd('*') + "\" има незаписани промени. Да бъде ли записан?",
+                    "Незаписани промени", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+                if (answer == DialogResult.Cancel) { e.Cancel = true; return; }
+                if (answer == DialogResult.Yes)
+                {
+                    SaveDocument(page);
+                    if (_savedTexts[page] != _tabEditors[page].Text) { e.Cancel = true; return; }
+                }
+            }
+        }
+
+        // Показва намерените функции, методи, класове и структури; двойното щракване отива на реда.
+        private void ShowCodeSymbols()
+        {
+            if (_editor == null) return;
+            var symbols = new List<Tuple<string, int>>();
+            string[] lines = _editor.Lines;
+            Regex pattern = new Regex(@"^\\s*(?:(?:static|inline|virtual|constexpr|unsigned|const)\\s+)*(?:[A-Za-z_][A-Za-z0-9_:<>*&]*\\s+)+([A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*(?:const\\s*)?(?:\\{|$)|^\\s*(class|struct|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                Match m = pattern.Match(lines[i]);
+                if (!m.Success) continue;
+                string name = !String.IsNullOrEmpty(m.Groups[2].Value) ? m.Groups[2].Value :
+                    (!String.IsNullOrEmpty(m.Groups[1].Value) ? m.Groups[1].Value : m.Groups[3].Value);
+                if (!String.IsNullOrEmpty(name)) symbols.Add(Tuple.Create(name + "    — ред " + (i + 1), i));
+            }
+            using (Form dialog = new Form())
+            using (ListBox list = new ListBox())
+            using (Button go = new Button())
+            {
+                dialog.Text = "Функции и символи";
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.Size = new Size(420, 500);
+                list.Dock = DockStyle.Fill;
+                list.Font = new Font("Consolas", 10);
+                foreach (var item in symbols) list.Items.Add(item.Item1);
+                if (symbols.Count == 0) list.Items.Add("Не са намерени функции или типове.");
+                go.Text = "Отиди към избрания символ";
+                go.Dock = DockStyle.Bottom;
+                go.Height = 34;
+                Action navigate = () =>
+                {
+                    if (list.SelectedIndex < 0 || list.SelectedIndex >= symbols.Count) return;
+                    int line = symbols[list.SelectedIndex].Item2;
+                    int pos = _editor.GetFirstCharIndexFromLine(line);
+                    if (pos >= 0) { _editor.Select(pos, 0); _editor.Focus(); _editor.ScrollToCaret(); }
+                    dialog.Close();
+                };
+                list.DoubleClick += (s, e) => navigate();
+                go.Click += (s, e) => navigate();
+                dialog.Controls.Add(list);
+                dialog.Controls.Add(go);
+                dialog.ShowDialog(this);
+            }
+        }
+
+        // При двойно щракване върху съобщение с номер на ред опитваме да отворим съответния ред.
+        private void NavigateFromBuildOutput()
+        {
+            Match m = Regex.Match(_output.SelectedText.Length > 0 ? _output.SelectedText : _output.Text,
+                @"(?:\\(|:)(\\d+)(?:,\\d+)?\\)?");
+            if (!m.Success || _editor == null) return;
+            int line;
+            if (!Int32.TryParse(m.Groups[1].Value, out line) || line < 1 || line > _editor.Lines.Length) return;
+            int pos = _editor.GetFirstCharIndexFromLine(line - 1);
+            if (pos >= 0) { _editor.Select(pos, 0); _editor.Focus(); _editor.ScrollToCaret(); }
         }
 
         private void SaveDocument(TabPage page)
