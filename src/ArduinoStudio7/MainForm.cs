@@ -1369,7 +1369,7 @@ namespace ArduinoStudio7
             string name = AskText("Инсталиране на библиотека", "Име на библиотеката от Arduino Library Manager:", "");
             if (String.IsNullOrWhiteSpace(name)) return;
             name = name.Trim();
-            if (name.IndexOfAny(new[] { '\\r', '\\n', ';', '&', '|', '>' , '<' }) >= 0)
+            if (name.IndexOfAny(new[] { '\r', '\n', ';', '&', '|', '>' , '<' }) >= 0)
             {
                 MessageBox.Show(this, "Името съдържа недопустими символи.", "Библиотека", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
