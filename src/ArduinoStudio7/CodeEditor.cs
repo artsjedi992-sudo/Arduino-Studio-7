@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Linq; // LINQ: използва се за филтриране и проверка на редовете при коментиране.
 using System.Drawing;
 using System.Text.RegularExpressions;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using ScintillaNET;
 
 namespace ArduinoStudio7
 {
     // Редактор в светлата цветова схема на Visual Studio 2019, с оцветяване и подсказки.
-    public sealed class CodeEditor : RichTextBox
+    public sealed class CodeEditor : Scintilla
     {
         // Win32 съобщения за запазване на видимия ред при оцветяване.
         private const int WM_SETREDRAW = 0x000B;
@@ -30,7 +30,6 @@ namespace ArduinoStudio7
         private string _lastHintWord = null;
         private string _lastHintText = null;
         private bool _hintVisible = false;
-        private readonly Timer _highlightTimer = new Timer();
         private readonly ContextMenuStrip _completionMenu = new ContextMenuStrip();
         private readonly HashSet<int> _bookmarks = new HashSet<int>(); // Отметки редове за навигация в текущия файл.
         private readonly HashSet<string> _keywords = new HashSet<string>(StringComparer.Ordinal)
@@ -46,8 +45,29 @@ namespace ArduinoStudio7
 
         public CodeEditor()
         {
-            // Настройваме моноширинен шрифт и цветове, наподобяващи Visual Studio.
+            // Настройваме Scintilla като редактор на C/C++ с моноширинен шрифт.
             Font = new Font("Consolas", 10.0f);
+            Lexer = Lexer.Cpp;
+            StyleResetDefault();
+            Styles[Style.Default].Font = "Consolas";
+            Styles[Style.Default].Size = 10;
+            Styles[Style.Default].ForeColor = Color.FromArgb(30, 30, 30);
+            Styles[Style.Default].BackColor = Color.White;
+            StyleClearAll();
+            Styles[Style.Cpp.Comment].ForeColor = Color.FromArgb(0, 128, 0);
+            Styles[Style.Cpp.CommentLine].ForeColor = Color.FromArgb(0, 128, 0);
+            Styles[Style.Cpp.CommentDoc].ForeColor = Color.FromArgb(0, 128, 0);
+            Styles[Style.Cpp.Number].ForeColor = Color.FromArgb(9, 134, 88);
+            Styles[Style.Cpp.String].ForeColor = Color.FromArgb(163, 21, 21);
+            Styles[Style.Cpp.Character].ForeColor = Color.FromArgb(163, 21, 21);
+            Styles[Style.Cpp.Word].ForeColor = Color.FromArgb(0, 0, 220);
+            Styles[Style.Cpp.Word2].ForeColor = Color.FromArgb(43, 145, 175);
+            Styles[Style.Cpp.Preprocessor].ForeColor = Color.FromArgb(175, 90, 190);
+            SetKeywords(0, "void bool boolean byte char unsigned signed short int long float double const static volatile return if else for while do switch case break continue default struct class enum typedef sizeof true false nullptr HIGH LOW INPUT OUTPUT INPUT_PULLUP LED_BUILTIN pinMode digitalWrite digitalRead analogRead analogWrite delay delayMicroseconds millis micros attachInterrupt detachInterrupt Serial Serial1 Serial2 Serial3 begin println print setup loop PROGMEM String word size_t");
+            SetKeywords(1, "uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t HardwareSerial");
+            TabWidth = 4;
+            UseTabs = false;
+            WrapMode = ScintillaNET.WrapMode.None;
             // ToolTip се показва ръчно след 2 секунди неподвижна мишка.
             _hint.InitialDelay = 2000;
             _hint.ReshowDelay = 2000;
@@ -62,11 +82,7 @@ namespace ArduinoStudio7
             WordWrap = false;
             DetectUrls = false;
             HideSelection = false;
-            // Отлагаме оцветяването, за да остане въвеждането плавно.
-            _highlightTimer.Interval = 700; // Не оцветяваме при всяко кратко спиране на курсора — пазим плавното писане и скролиране.
-            _highlightTimer.Tick += delegate { _highlightTimer.Stop(); HighlightSyntax(); };
-            _viewportHighlightTimer.Tick += delegate { _viewportHighlightTimer.Stop(); HighlightSyntax(); };
-            TextChanged += delegate { _highlightTimer.Stop(); _highlightTimer.Start(); };
+            // Scintilla използва нативен лексер; не форматираме документа при скролиране.
             MouseMove += EditorMouseMove;
             MouseLeave += delegate { _hintTimer.Stop(); HideHint(); };
             MouseDown += EditorMouseDown;
@@ -123,7 +139,7 @@ namespace ArduinoStudio7
             editorMenu.Items.Add("Намали шрифта", null, (s, e) => ChangeEditorFontSize(-1));
             editorMenu.Items.Add("Нормален размер на шрифта", null, (s, e) => ResetEditorFontSize());
             ContextMenuStrip = editorMenu;
-            Disposed += delegate { _hint.Dispose(); _hintTimer.Dispose(); _highlightTimer.Dispose(); _viewportHighlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
+            Disposed += delegate { _hint.Dispose(); _hintTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
         }
 
         // Цветове на контекстното меню — светлосиньо маркиране като във Visual Studio 2019.
@@ -144,114 +160,60 @@ namespace ArduinoStudio7
             public override Color SeparatorLight { get { return Color.FromArgb(248, 249, 252); } }
         }
 
-        // Позволява на главния прозорец да поиска оцветяване веднага след зареждане на файл.
+        // ScintillaNET оцветява синтаксиса нативно; пазим стария публичен метод.
         public void RefreshSyntaxHighlighting()
         {
-            _highlightTimer.Stop(); // Не оставяме старо отложено оцветяване да се изпълни повторно.
-            if (TextLength == 0) return; // Празният редактор няма какво да оцветява.
-            if (IsHandleCreated) HighlightSyntax(); // Оцветяваме веднага, когато контролът вече е създаден.
-            else _highlightTimer.Start(); // Ако още няма прозоречна дръжка, оставяме таймера да го направи по-късно.
+            Colourise(0, -1);
         }
 
-        // Оцветяваме само видимата част от документа, а не хиляди диапазони във целия файл.
-        // Това избягва блокиране при скролиране с колелцето на мишката.
-        private readonly Timer _viewportHighlightTimer = new Timer();
-
-        private void ScheduleViewportHighlight()
+        // Съвместимост със стария интерфейс на командите и главния прозорец.
+        public new string[] Lines
         {
-            // Отлагаме оцветяването до кратка пауза в скролирането.
-            _viewportHighlightTimer.Stop();
-            _viewportHighlightTimer.Interval = 180;
-            _viewportHighlightTimer.Start();
+            get { return Text.Replace("\r\n", "\n").Split('\n'); }
         }
 
-        // Засичаме скрол с колелцето, лентата за превъртане и клавиатурата.
-        protected override void WndProc(ref Message m)
+        public int SelectionLength
         {
-            base.WndProc(ref m);
-            if (m.Msg == 0x020A || m.Msg == 0x0115 || m.Msg == 0x0114)
-                ScheduleViewportHighlight();
+            get { return Math.Abs(SelectionEnd - SelectionStart); }
         }
 
-        private void HighlightSyntax()
+        public bool AcceptsTab { get; set; }
+        public bool DetectUrls { get; set; }
+        public bool HideSelection { get; set; }
+
+        public bool WordWrap
         {
-            if (TextLength == 0 || !IsHandleCreated || ClientSize.Height <= 0) return;
-
-            // Взимаме приблизително видимите редове плюс по един резервен ред отгоре и отдолу.
-            int topLine = GetLineFromCharIndex(GetCharIndexFromPosition(new Point(1, 1)));
-            int bottomLine = GetLineFromCharIndex(GetCharIndexFromPosition(new Point(1, Math.Max(1, ClientSize.Height - 2))));
-            int firstLine = Math.Max(0, topLine - 1);
-            int lastLine = Math.Min(Lines.Length - 1, bottomLine + 2);
-            if (firstLine < 0 || lastLine < firstLine) return;
-
-            int start = GetFirstCharIndexFromLine(firstLine);
-            int afterLast = lastLine + 1 < Lines.Length ? GetFirstCharIndexFromLine(lastLine + 1) : TextLength;
-            if (start < 0 || afterLast < start) return;
-
-            int caret = SelectionStart;
-            int selectionLength = SelectionLength;
-            string source = Text.Substring(start, afterLast - start);
-            NativePoint scrollPosition = new NativePoint();
-            SendMessage(Handle, EM_GETSCROLLPOS, IntPtr.Zero, ref scrollPosition);
-            SendMessage(Handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
-            try
-            {
-                // Нулираме цвета само за видимия диапазон — SelectAll() вече не се използва.
-                Select(start, afterLast - start);
-                SelectionColor = Color.FromArgb(30, 30, 30);
-
-                // Препроцесорни директиви.
-                ApplyColor(source, start, @"(?m)^\s*#\s*\w+.*$", Color.FromArgb(175, 90, 190));
-                // Текстови константи и числа.
-                ApplyColor(source, start, @"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
-                ApplyColor(source, start, @"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
-
-                // Оцветяваме ключови думи, типове и имена на функции само в този видим диапазон.
-                foreach (Match match in Regex.Matches(source, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
-                {
-                    string word = match.Value;
-                    Color? tokenColor = null;
-                    if (_keywords.Contains(word))
-                        tokenColor = Color.FromArgb(0, 0, 220);
-                    else if (Regex.IsMatch(word, @"^(?:uint\d+_t|int\d+_t|size_t|String|HardwareSerial)$"))
-                        tokenColor = Color.FromArgb(43, 145, 175);
-                    else
-                    {
-                        int next = match.Index + match.Length;
-                        while (next < source.Length && Char.IsWhiteSpace(source[next])) next++;
-                        if (next < source.Length && source[next] == '(')
-                            tokenColor = Color.FromArgb(121, 94, 38);
-                    }
-
-                    if (tokenColor.HasValue)
-                    {
-                        Select(start + match.Index, match.Length);
-                        SelectionColor = tokenColor.Value;
-                    }
-                }
-
-                // Коментарите са последни, за да останат зелени независимо от останалите правила.
-                ApplyColor(source, start, @"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
-
-                // Връщаме маркирането и каретката, без да променяме позицията на скрола.
-                Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - caret)));
-            }
-            finally
-            {
-                SendMessage(Handle, EM_SETSCROLLPOS, IntPtr.Zero, ref scrollPosition);
-                SendMessage(Handle, WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
-                Invalidate();
-            }
+            get { return WrapMode != ScintillaNET.WrapMode.None; }
+            set { WrapMode = value ? ScintillaNET.WrapMode.Word : ScintillaNET.WrapMode.None; }
         }
 
-        // Прилага цветове към съвпаденията, като превръща локалния индекс във абсолютен.
-        private void ApplyColor(string source, int baseIndex, string pattern, Color color)
+        public new void Select(int start, int length)
         {
-            foreach (Match match in Regex.Matches(source, pattern))
-            {
-                Select(baseIndex + match.Index, match.Length);
-                SelectionColor = color;
-            }
+            int safeStart = Math.Max(0, Math.Min(start, TextLength));
+            int safeEnd = Math.Max(safeStart, Math.Min(safeStart + Math.Max(0, length), TextLength));
+            SetSelection(safeStart, safeEnd);
+        }
+
+        public int GetLineFromCharIndex(int charIndex)
+        {
+            return LineFromPosition(Math.Max(0, Math.Min(charIndex, TextLength)));
+        }
+
+        public int GetFirstCharIndexFromLine(int line)
+        {
+            if (line < 0 || line >= Lines.Length) return -1;
+            return PositionFromLine(line);
+        }
+
+        public int GetCharIndexFromPosition(Point point)
+        {
+            return CharPositionFromPoint(point.X, point.Y);
+        }
+
+        public void ScrollToCaret()
+        {
+            EnsureVisible(LineFromPosition(CurrentPosition));
+            GotoPosition(CurrentPosition);
         }
 
         private void EditorKeyDown(object sender, KeyEventArgs e)
