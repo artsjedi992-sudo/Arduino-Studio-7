@@ -26,8 +26,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/tools | Out-Null
-          Copy-Item src/ArduinoStudio7/bin/Release/ArduinoStudio7.exe artifacts/
-          if (Test-Path src/ArduinoStudio7/bin/Release/ArduinoStudio7.exe.config) { Copy-Item src/ArduinoStudio7/bin/Release/ArduinoStudio7.exe.config artifacts/ }
+          # Копираме целия изходен каталог, а не само EXE и CONFIG.
+          # ScintillaNET.dll и SciLexer.dll са необходими при стартиране на редактора.
+          Copy-Item "src/ArduinoStudio7/bin/Release/*" "artifacts/" -Recurse -Force
 
           # Добавяме Arduino CLI, който приложението намира автоматично в папка tools.
           $cliUrl = "https://github.com/arduino/arduino-cli/releases/download/v0.35.3/arduino-cli_0.35.3_Windows_64bit.zip"
