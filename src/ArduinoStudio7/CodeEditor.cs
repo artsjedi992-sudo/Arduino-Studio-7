@@ -560,7 +560,7 @@ namespace ArduinoStudio7
             int endLine = Math.Max(line, target);
             int end = endLine + 1 < Lines.Length ? GetFirstCharIndexFromLine(endLine + 1) : TextLength;
             if (start < 0 || end < start) return;
-            string[] pair = Text.Substring(start, end - start).Replace("\\r\\n", "\\n").Split('\\n');
+            string[] pair = Text.Substring(start, end - start).Replace("\r\n", "\n").Split('\n');
             if (pair.Length < 2) return;
             string first = pair[0], second = pair[1];
             string swapped = direction < 0
