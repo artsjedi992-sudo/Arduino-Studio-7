@@ -8,7 +8,7 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' "><DebugSymbols>true</DebugSymbols><DebugType>full</DebugType><Optimize>false</Optimize><OutputPath>bin\Debug\</OutputPath><DefineConstants>DEBUG;TRACE</DefineConstants><WarningLevel>4</WarningLevel></PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' "><DebugType>pdbonly</DebugType><Optimize>true</Optimize><OutputPath>bin\Release\</OutputPath><DefineConstants>TRACE</DefineConstants><WarningLevel>4</WarningLevel></PropertyGroup>
-  <ItemGroup><Reference Include="System" /><Reference Include="System.Core" /><Reference Include="System.Drawing" /><Reference Include="System.Windows.Forms" /></ItemGroup>
+  <ItemGroup><PackageReference Include="jacobslusser.ScintillaNET" Version="3.6.3" /><Reference Include="System" /><Reference Include="System.Core" /><Reference Include="System.Drawing" /><Reference Include="System.Windows.Forms" /></ItemGroup>
   <ItemGroup><Compile Include="Program.cs" /><Compile Include="MainForm.cs" /><Compile Include="CodeEditor.cs" /><Compile Include="ArduinoToolchain.cs" /></ItemGroup>
   <ItemGroup><None Include="App.config" /></ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
