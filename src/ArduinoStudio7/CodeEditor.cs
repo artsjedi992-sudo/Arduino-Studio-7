@@ -138,6 +138,15 @@ namespace ArduinoStudio7
             public override Color SeparatorLight { get { return Color.FromArgb(248, 249, 252); } }
         }
 
+        // Позволява на главния прозорец да поиска оцветяване веднага след зареждане на файл.
+        public void RefreshSyntaxHighlighting()
+        {
+            _highlightTimer.Stop(); // Не оставяме старо отложено оцветяване да се изпълни повторно.
+            if (TextLength == 0) return; // Празният редактор няма какво да оцветява.
+            if (IsHandleCreated) HighlightSyntax(); // Оцветяваме веднага, когато контролът вече е създаден.
+            else _highlightTimer.Start(); // Ако още няма прозоречна дръжка, оставяме таймера да го направи по-късно.
+        }
+
         private void HighlightSyntax()
         {
             // Запазваме каретката и точната позиция на скрола преди оцветяване.
