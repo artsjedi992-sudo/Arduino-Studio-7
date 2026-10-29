@@ -241,7 +241,7 @@ namespace ArduinoStudio7
                 FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
                 BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
             };
-            upper.Panel1.Controls.Add(documents);
+            upper.Panel1.Controls.Add(_documents);
             upper.Panel2.Controls.Add(rightTools);
 
             // Долният прозорец за грешки и компилация е отделен и може да се преоразмерява.
