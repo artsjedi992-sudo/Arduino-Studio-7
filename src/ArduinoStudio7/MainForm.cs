@@ -80,6 +80,12 @@ namespace ArduinoStudio7
             editMenu.DropDownItems.Add("Замени всички...", null, (s, e) => ReplaceInEditor());
             editMenu.DropDownItems.Add("Отиди на ред...   Ctrl+G", null, (s, e) => GoToEditorLine());
             editMenu.DropDownItems.Add("Списък на функциите / символите", null, (s, e) => ShowCodeSymbols());
+            editMenu.DropDownItems.Add("Постави / махни отметка  Ctrl+F2", null, (s, e) => _editor.ToggleBookmark());
+            editMenu.DropDownItems.Add("Следваща отметка  F2", null, (s, e) => _editor.NextBookmark());
+            editMenu.DropDownItems.Add("Изчисти отметките", null, (s, e) => _editor.ClearBookmarks());
+            editMenu.DropDownItems.Add("Отстъпи избраните редове  Tab", null, (s, e) => _editor.IndentSelection(true));
+            editMenu.DropDownItems.Add("Прибери избраните редове  Shift+Tab", null, (s, e) => _editor.IndentSelection(false));
+            editMenu.DropDownItems.Add("Огради с блоков коментар /* ... */", null, (s, e) => _editor.ToggleBlockComment());
             editMenu.DropDownItems.Add(new ToolStripSeparator());
             editMenu.DropDownItems.Add("Дублирай ред / избран текст   Ctrl+D", null, (s, e) => _editor.DuplicateCurrentLineOrSelection());
             editMenu.DropDownItems.Add("Коментирай / разкоментирай   Ctrl+/", null, (s, e) => _editor.ToggleCommentSelection());
