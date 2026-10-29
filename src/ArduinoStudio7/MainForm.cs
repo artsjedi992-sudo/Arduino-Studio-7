@@ -544,9 +544,9 @@ namespace ArduinoStudio7
         // Глобални клавишни комбинации за бърза работа с документите.
         private void MainFormKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Control && e.KeyCode == Keys.S) { SaveFile(); e.SuppressKeyPress = true; }
+            if (e.Control && e.Shift && e.KeyCode == Keys.S) { SaveAllDocuments(); e.SuppressKeyPress = true; }
+            else if (e.Control && e.KeyCode == Keys.S) { SaveFile(); e.SuppressKeyPress = true; }
             else if (e.Control && e.KeyCode == Keys.W) { CloseDocument(_documents.SelectedTab, false); e.SuppressKeyPress = true; }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.S) { SaveAllDocuments(); e.SuppressKeyPress = true; }
         }
 
         // Записва всички отворени документи; файловете без име ще поискат място за запис.
