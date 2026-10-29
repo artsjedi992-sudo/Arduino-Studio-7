@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.IO.Ports;
@@ -11,7 +12,12 @@ namespace ArduinoStudio7
     // Главният прозорец — оформление в стил Visual Studio с проект, редактор и изход.
     public sealed class MainForm : Form
     {
-        private readonly CodeEditor _editor = new CodeEditor();
+        private CodeEditor _editor;
+        private TabControl _documents;
+        private readonly Dictionary<TabPage, CodeEditor> _tabEditors = new Dictionary<TabPage, CodeEditor>();
+        private readonly Dictionary<TabPage, string> _savedTexts = new Dictionary<TabPage, string>();
+        private bool _switchingDocument = false;
+        private Action _updateEditorStatus;
         private readonly TreeView _projectTree = new TreeView();
         private readonly RichTextBox _output = new RichTextBox();
         private readonly ComboBox _board = new ComboBox();
@@ -43,7 +49,6 @@ namespace ArduinoStudio7
             var menu = new MenuStrip { BackColor = Color.FromArgb(238, 242, 250), ForeColor = Color.FromArgb(30, 30, 30), RenderMode = ToolStripRenderMode.Professional };
             // Единна цветова тема за падащите менюта и лентата с инструменти.
             menu.Renderer = new ToolStripProfessionalRenderer(new ArduinoColorTable());
-            _editor.FindRequested += (s, e) => FindInEditor();
             var fileMenu = new ToolStripMenuItem("Файл");
             fileMenu.DropDownItems.Add("Нов скеч", null, (s, e) => NewSketch());
             fileMenu.DropDownItems.Add("Отвори...", null, (s, e) => OpenFile());
@@ -128,15 +133,24 @@ namespace ArduinoStudio7
             toolbar.Items.Add(new ToolStripControlHost(_port));
             toolbar.Items.Add(Button("Обнови", (s,e) => RefreshPorts()));
 
-            // Редакторът заема центъра и използва светлата цветова схема на Visual Studio.
-            _editor.Dock = DockStyle.Fill;
-            _editor.Margin = Padding.Empty;
-
-            // Таб за отворения документ, както в IDE.
-            var documents = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 4), HotTrack = true };
-            var documentTab = new TabPage("Нов скеч") { BackColor = Color.White, Padding = Padding.Empty };
-            documentTab.Controls.Add(_editor);
-            documents.TabPages.Add(documentTab);
+            // Много-документен редактор: всеки файл получава собствен таб и собствено състояние.
+            _documents = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 4), HotTrack = true };
+            _documents.SelectedIndexChanged += (s, e) => ActivateSelectedDocument();
+            var tabMenu = new ContextMenuStrip();
+            tabMenu.Items.Add("Запиши този файл", null, (s, e) => SaveDocument(GetContextTab(tabMenu)));
+            tabMenu.Items.Add("Затвори този файл", null, (s, e) => CloseDocument(GetContextTab(tabMenu), false));
+            tabMenu.Items.Add("Затвори без запис", null, (s, e) => CloseDocument(GetContextTab(tabMenu), true));
+            tabMenu.Items.Add(new ToolStripSeparator());
+            tabMenu.Items.Add("Затвори всички други файлове", null, (s, e) => CloseOtherDocuments(GetContextTab(tabMenu)));
+            _documents.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    int index = GetTabIndexAt(_documents, e.Location);
+                    if (index >= 0) { _documents.SelectedIndex = index; tabMenu.Show(_documents, e.Location); }
+                }
+            };
+            _documents.ContextMenuStrip = tabMenu;
 
             // Solution Explorer е вдясно, а панелът Properties е под него.
             _projectTree.Dock = DockStyle.Fill;
@@ -287,13 +301,13 @@ namespace ArduinoStudio7
             // Обновяваме информацията веднага при движение на курсора или промяна на текста.
             Action updateEditorStatus = () =>
             {
+                if (_editor == null || _editor.IsDisposed) { statusPosition.Text = "Няма активен файл"; statusLength.Text = "Символи: 0"; return; }
                 int line = _editor.GetLineFromCharIndex(_editor.SelectionStart);
                 int lineStart = _editor.GetFirstCharIndexFromLine(line);
                 statusPosition.Text = "Ред " + (line + 1) + ", колона " + (_editor.SelectionStart - Math.Max(0, lineStart) + 1);
                 statusLength.Text = "Символи: " + _editor.TextLength;
             };
-            _editor.SelectionChanged += (s, e) => updateEditorStatus();
-            _editor.TextChanged += (s, e) => updateEditorStatus();
+            _updateEditorStatus = updateEditorStatus;
             updateEditorStatus();
 
             Controls.Add(split);
@@ -415,13 +429,12 @@ namespace ArduinoStudio7
 
         private void NewSketch()
         {
-            // Подготвяме нов примерен Arduino скеч.
-            _currentFile = ""; _projectFolder = "";
-            _editor.Text = "void setup()\n{\n    pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop()\n{\n    digitalWrite(LED_BUILTIN, HIGH);\n    delay(500);\n    digitalWrite(LED_BUILTIN, LOW);\n    delay(500);\n}\n";
-            Text = "Arduino Studio 7 — Нов скеч";
+            // Всеки нов скеч отваря отделен таб, без да замества вече отворените файлове.
+            string starter = "void setup()\r\n{\r\n    pinMode(LED_BUILTIN, OUTPUT);\r\n}\r\n\r\nvoid loop()\r\n{\r\n    digitalWrite(LED_BUILTIN, HIGH);\r\n    delay(500);\r\n    digitalWrite(LED_BUILTIN, LOW);\r\n    delay(500);\r\n}\r\n";
+            AddDocumentTab(null, starter, "Нов скеч");
             _projectTree.Nodes.Clear();
             _projectTree.Nodes.Add(new TreeNode("Нов скеч (не е записан)"));
-            Log("Готово. Запишете скеча в папка със същото име като .ino файла.");
+            Log("Създаден е нов таб. Запишете скеча с Файл → Запиши като.");
         }
 
         private void OpenFile()
@@ -436,55 +449,227 @@ namespace ArduinoStudio7
 
         private void LoadFile(string path)
         {
-            // Зареждаме текстовия файл и обновяваме заглавието/дървото.
+            // Ако файлът вече е отворен, активираме съществуващия таб вместо да го дублираме.
             try
             {
-                _currentFile = path; _projectFolder = Path.GetDirectoryName(path);
-                _editor.Text = File.ReadAllText(path);
-                Text = "Arduino Studio 7 — " + Path.GetFileName(path);
+                string fullPath = Path.GetFullPath(path);
+                foreach (TabPage page in _documents.TabPages)
+                {
+                    if (page.Tag is string && String.Equals(Path.GetFullPath((string)page.Tag), fullPath, StringComparison.OrdinalIgnoreCase))
+                    { _documents.SelectedTab = page; return; }
+                }
+                string content = File.ReadAllText(fullPath);
+                AddDocumentTab(fullPath, content, Path.GetFileName(fullPath));
+                _projectFolder = Path.GetDirectoryName(fullPath);
                 RefreshProjectTree();
-                Log("Отворен файл: " + path);
+                Log("Отворен файл в нов таб: " + fullPath);
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при отваряне", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
 
         private void SaveFile()
         {
-            // Записваме файла; при нов скеч първо искаме име и местоположение.
-            if (String.IsNullOrEmpty(_currentFile)) { SaveFileAs(); return; }
-            try { File.WriteAllText(_currentFile, _editor.Text); RefreshProjectTree(); Log("Записан: " + _currentFile); }
+            // Ctrl+S и менюто записват само активния документ.
+            SaveDocument(_documents == null ? null : _documents.SelectedTab);
+        }
+
+        private void SaveDocument(TabPage page)
+        {
+            if (page == null || !_tabEditors.ContainsKey(page)) return;
+            CodeEditor editor = _tabEditors[page];
+            string path = page.Tag as string;
+            if (String.IsNullOrEmpty(path)) { SaveFileAsFor(page); return; }
+            try
+            {
+                File.WriteAllText(path, editor.Text);
+                _savedTexts[page] = editor.Text;
+                UpdateTabTitle(page);
+                if (page == _documents.SelectedTab) { _currentFile = path; _projectFolder = Path.GetDirectoryName(path); }
+                RefreshProjectTree();
+                Log("Записан: " + path);
+            }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при запис", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
 
         private void SaveFileAs()
         {
-            // Записваме като .ino в папка, чието име съвпада с името на скеча.
+            SaveFileAsFor(_documents == null ? null : _documents.SelectedTab);
+        }
+
+        private void SaveFileAsFor(TabPage page)
+        {
+            if (page == null || !_tabEditors.ContainsKey(page)) return;
             using (var dialog = new SaveFileDialog())
             {
-                dialog.Filter = "Arduino скеч (*.ino)|*.ino|C++ файл (*.cpp)|*.cpp|Всички файлове|*.*";
-                dialog.FileName = "MySketch.ino";
+                dialog.Filter = "Arduino скеч (*.ino)|*.ino|C++ файл (*.cpp)|*.cpp|Header файл (*.h)|*.h|Всички файлове|*.*";
+                dialog.FileName = Path.GetFileNameWithoutExtension(page.Tag as string ?? "MySketch") + Path.GetExtension(page.Tag as string ?? ".ino");
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
-                    string folder = Path.GetDirectoryName(dialog.FileName);
-                    string stem = Path.GetFileNameWithoutExtension(dialog.FileName);
-                    string targetFolder = Path.Combine(folder, stem);
-                    if (Path.GetExtension(dialog.FileName).Equals(".ino", StringComparison.OrdinalIgnoreCase))
+                    string path = dialog.FileName;
+                    if (Path.GetExtension(path).Equals(".ino", StringComparison.OrdinalIgnoreCase))
                     {
+                        string folder = Path.GetDirectoryName(path);
+                        string stem = Path.GetFileNameWithoutExtension(path);
+                        string targetFolder = Path.Combine(folder, stem);
                         Directory.CreateDirectory(targetFolder);
-                        _currentFile = Path.Combine(targetFolder, Path.GetFileName(dialog.FileName));
+                        path = Path.Combine(targetFolder, Path.GetFileName(path));
                     }
-                    else _currentFile = dialog.FileName;
-                    _projectFolder = Path.GetDirectoryName(_currentFile);
-                    File.WriteAllText(_currentFile, _editor.Text);
-                    Text = "Arduino Studio 7 — " + Path.GetFileName(_currentFile);
-                    RefreshProjectTree(); Log("Записан: " + _currentFile);
+                    if (_documents.TabPages.Cast<TabPage>().Any(p => p != page && p.Tag is string &&
+                        String.Equals(Path.GetFullPath((string)p.Tag), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)))
+                    {
+                        MessageBox.Show(this, "Този файл вече е отворен в друг таб.", "Запиши като", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    page.Tag = path;
+                    File.WriteAllText(path, _tabEditors[page].Text);
+                    _savedTexts[page] = _tabEditors[page].Text;
+                    _currentFile = path;
+                    _projectFolder = Path.GetDirectoryName(path);
+                    UpdateTabTitle(page);
+                    RefreshProjectTree();
+                    Log("Записан: " + path);
                 }
                 catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при запис", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             }
         }
 
         // Създаваме допълнителен файл в папката на проекта.
+        // Създава таб с отделен редактор и номерация на редовете в лявата лента.
+        private void AddDocumentTab(string path, string content, string title)
+        {
+            var editor = new CodeEditor();
+            editor.Dock = DockStyle.Fill;
+            editor.Margin = Padding.Empty;
+            editor.Text = content ?? String.Empty;
+            var host = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = Padding.Empty };
+            var gutter = new LineNumberGutter(editor) { Dock = DockStyle.Left, Width = 46 };
+            host.Controls.Add(editor);
+            host.Controls.Add(gutter);
+            var page = new TabPage(title) { BackColor = Color.White, Padding = Padding.Empty, Tag = path };
+            page.Controls.Add(host);
+            _tabEditors[page] = editor;
+            _savedTexts[page] = editor.Text;
+            editor.FindRequested += (s, e) => FindInEditor();
+            editor.TextChanged += (s, e) => { UpdateTabTitle(page); if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
+            editor.SelectionChanged += (s, e) => { if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
+            editor.Resize += (s, e) => gutter.Invalidate();
+            editor.MouseWheel += (s, e) => gutter.Invalidate();
+            editor.MouseUp += (s, e) => gutter.Invalidate();
+            editor.KeyUp += (s, e) => gutter.Invalidate();
+            _documents.TabPages.Add(page);
+            _documents.SelectedTab = page;
+            ActivateSelectedDocument();
+        }
+
+        // Активира избрания таб и синхронизира текущия файл, заглавието и статусната лента.
+        private void ActivateSelectedDocument()
+        {
+            if (_switchingDocument || _documents == null || _documents.SelectedTab == null) return;
+            TabPage page = _documents.SelectedTab;
+            CodeEditor editor;
+            if (!_tabEditors.TryGetValue(page, out editor)) return;
+            _switchingDocument = true;
+            try
+            {
+                _editor = editor;
+                _currentFile = page.Tag as string ?? String.Empty;
+                _projectFolder = String.IsNullOrEmpty(_currentFile) ? "" : Path.GetDirectoryName(_currentFile);
+                Text = "Arduino Studio 7 — " + (String.IsNullOrEmpty(_currentFile) ? page.Text.TrimEnd('*') : Path.GetFileName(_currentFile));
+                if (_updateEditorStatus != null) _updateEditorStatus();
+            }
+            finally { _switchingDocument = false; }
+        }
+
+        // Отбелязва незаписаните промени със звездичка в заглавието на таба.
+        private void UpdateTabTitle(TabPage page)
+        {
+            if (page == null || !_tabEditors.ContainsKey(page)) return;
+            string path = page.Tag as string;
+            string name = String.IsNullOrEmpty(path) ? "Нов скеч" : Path.GetFileName(path);
+            string saved;
+            bool dirty = !_savedTexts.TryGetValue(page, out saved) || saved != _tabEditors[page].Text;
+            page.Text = name + (dirty ? "*" : "");
+        }
+
+        // Записва само документа, избран от контекстното меню на таба.
+        private TabPage GetContextTab(ContextMenuStrip menu)
+        {
+            return _documents == null ? null : _documents.SelectedTab;
+        }
+
+        private int GetTabIndexAt(TabControl tabs, Point point)
+        {
+            for (int i = 0; i < tabs.TabCount; i++)
+                if (tabs.GetTabRect(i).Contains(point)) return i;
+            return -1;
+        }
+
+        // Затваря избрания таб; стандартното затваряне предлага запис, а отделната команда пропуска записа.
+        private void CloseDocument(TabPage page, bool discardWithoutSaving)
+        {
+            if (page == null || !_tabEditors.ContainsKey(page)) return;
+            string saved;
+            bool dirty = !_savedTexts.TryGetValue(page, out saved) || saved != _tabEditors[page].Text;
+            if (dirty && !discardWithoutSaving)
+            {
+                DialogResult answer = MessageBox.Show(this, "Файлът има незаписани промени. Да бъде ли записан?\n\n" + page.Text.TrimEnd('*'),
+                    "Затваряне на файл", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (answer == DialogResult.Cancel) return;
+                if (answer == DialogResult.Yes) { SaveDocument(page); if (page.Text.EndsWith("*")) return; }
+            }
+            _switchingDocument = true;
+            try
+            {
+                _documents.TabPages.Remove(page);
+                CodeEditor editor = _tabEditors[page];
+                _tabEditors.Remove(page);
+                _savedTexts.Remove(page);
+                editor.Dispose();
+                page.Dispose();
+            }
+            finally { _switchingDocument = false; }
+            if (_documents.TabPages.Count == 0) NewSketch();
+            else ActivateSelectedDocument();
+        }
+
+        // Затваря всички останали табове, като пита за всеки файл с промени.
+        private void CloseOtherDocuments(TabPage keep)
+        {
+            if (keep == null) return;
+            foreach (TabPage page in _documents.TabPages.Cast<TabPage>().Where(p => p != keep).ToArray())
+            {
+                CloseDocument(page, false);
+            }
+        }
+
+        // Отделна лента за номерата на редовете; използва реалната позиция на реда в RichTextBox.
+        private sealed class LineNumberGutter : Panel
+        {
+            private readonly CodeEditor _code;
+            public LineNumberGutter(CodeEditor editor) { _code = editor; BackColor = Color.FromArgb(245, 247, 251); BorderStyle = BorderStyle.None; }
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+                e.Graphics.Clear(BackColor);
+                using (var pen = new Pen(Color.FromArgb(218, 223, 232))) e.Graphics.DrawLine(pen, Width - 1, 0, Width - 1, Height);
+                using (var brush = new SolidBrush(Color.FromArgb(105, 115, 135)))
+                using (var font = new Font("Consolas", 9.0f))
+                {
+                    for (int line = 0; line < _code.Lines.Length; line++)
+                    {
+                        int first = _code.GetFirstCharIndexFromLine(line);
+                        if (first < 0) continue;
+                        Point pos = _code.GetPositionFromCharIndex(first);
+                        if (pos.Y < -font.Height || pos.Y > Height) continue;
+                        string number = (line + 1).ToString();
+                        SizeF size = e.Graphics.MeasureString(number, font);
+                        e.Graphics.DrawString(number, font, brush, Width - size.Width - 7, pos.Y + 1);
+                    }
+                }
+            }
+        }
+
         private void CreateProjectFile(string extension)
         {
             if (String.IsNullOrEmpty(_projectFolder) || !Directory.Exists(_projectFolder))
