@@ -164,10 +164,8 @@ namespace ArduinoStudio7
             if (TextLength == 0 || !IsHandleCreated) return;
             if (TextLength > MaxCharsForRichTextHighlighting)
             {
-                // Единно форматиране за големи файлове вместо скъпо оцветяване на всеки токен.
-                SelectAll();
-                SelectionColor = Color.FromArgb(30, 30, 30);
-                Select(Math.Min(SelectionStart, TextLength), 0);
+                // При голям файл не преформатираме текста изобщо: това избягва блокиране на UI нишката.
+                // ForeColor вече е зададен на тъмносиво в конструктора; запазваме позицията на каретката.
                 return;
             }
             int caret = SelectionStart;
