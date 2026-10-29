@@ -402,20 +402,60 @@ namespace ArduinoStudio7
 
         private void ShowCompletions()
         {
-            // Показваме допълненията като меню до текущата позиция на каретката.
+            // Списъкът съдържа често използвани Arduino/C++ функции, типове и готови конструкции.
             _completionMenu.Items.Clear();
-            string[] options = { "setup", "loop", "pinMode", "digitalWrite", "digitalRead", "analogRead",
-                "analogWrite", "delay", "millis", "micros", "Serial.begin", "Serial.println",
-                "HIGH", "LOW", "INPUT", "OUTPUT", "INPUT_PULLUP", "LED_BUILTIN", "bool", "byte", "int", "long", "float", "String" };
-            foreach (string option in options)
+            var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                string value = option;
-                _completionMenu.Items.Add(value, null, (s, e) =>
+                { "setup", "void setup()\\r\\n{\\r\\n    // Инициализация\\r\\n}\\r\\n" },
+                { "loop", "void loop()\\r\\n{\\r\\n    // Основен цикъл\\r\\n}\\r\\n" },
+                { "if", "if (условие)\\r\\n{\\r\\n    \\r\\n}\\r\\n" },
+                { "for", "for (int i = 0; i < 10; i++)\\r\\n{\\r\\n    \\r\\n}\\r\\n" },
+                { "while", "while (условие)\\r\\n{\\r\\n    \\r\\n}\\r\\n" },
+                { "switch", "switch (стойност)\\r\\n{\\r\\n    case 0:\\r\\n        break;\\r\\n    default:\\r\\n        break;\\r\\n}\\r\\n" },
+                { "pinMode", "pinMode(LED_BUILTIN, OUTPUT);" },
+                { "digitalWrite", "digitalWrite(LED_BUILTIN, HIGH);" },
+                { "digitalRead", "digitalRead(LED_BUILTIN)" },
+                { "analogRead", "analogRead(A0)" },
+                { "analogWrite", "analogWrite(LED_BUILTIN, 128);" },
+                { "delay", "delay(1000);" },
+                { "delayMicroseconds", "delayMicroseconds(10);" },
+                { "millis", "millis()" },
+                { "micros", "micros()" },
+                { "Serial.begin", "Serial.begin(9600);" },
+                { "Serial.print", "Serial.print(стойност);" },
+                { "Serial.println", "Serial.println(стойност);" },
+                { "attachInterrupt", "attachInterrupt(digitalPinToInterrupt(2), функция, RISING);" },
+                { "HIGH", "HIGH" }, { "LOW", "LOW" }, { "INPUT", "INPUT" },
+                { "OUTPUT", "OUTPUT" }, { "INPUT_PULLUP", "INPUT_PULLUP" },
+                { "LED_BUILTIN", "LED_BUILTIN" }, { "true", "true" }, { "false", "false" },
+                { "bool", "bool" }, { "byte", "byte" }, { "char", "char" }, { "int", "int" },
+                { "long", "long" }, { "float", "float" }, { "double", "double" },
+                { "String", "String" }, { "unsigned long", "unsigned long" }, { "const", "const" },
+                { "volatile", "volatile" }, { "return", "return" }, { "PROGMEM", "PROGMEM" }
+            };
+
+            // Определяме думата пред курсора и показваме първо съвпадащите допълнения.
+            int caretIndex = SelectionStart;
+            int prefixStart = caretIndex;
+            while (prefixStart > 0 && IsIdentifierChar(Text[prefixStart - 1])) prefixStart--;
+            string prefix = Text.Substring(prefixStart, caretIndex - prefixStart);
+            foreach (var option in options.Where(item => String.IsNullOrEmpty(prefix) ||
+                item.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            {
+                string label = option.Key;
+                string insertion = option.Value;
+                _completionMenu.Items.Add(label, null, (sender, args) =>
                 {
-                    // Вмъкваме избраната дума/функция на мястото на каретката.
-                    SelectedText = value;
+                    // Заменяме написания префикс, вместо да дублираме текста пред курсора.
+                    Select(prefixStart, caretIndex - prefixStart);
+                    SelectedText = insertion;
                     Focus();
                 });
+            }
+
+            if (_completionMenu.Items.Count == 0)
+            {
+                _completionMenu.Items.Add("Няма съвпадения", null, null).Enabled = false;
             }
             Point caret = GetPositionFromCharIndex(SelectionStart);
             _completionMenu.Show(this, caret);
