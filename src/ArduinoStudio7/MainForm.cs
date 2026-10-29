@@ -49,6 +49,7 @@ namespace ArduinoStudio7
             BuildInterface();
             RefreshRecentFilesMenu();
             FormClosing += ConfirmCloseWithUnsavedDocuments;
+            FormClosing += (s, e) => { if (!e.Cancel) SaveSession(); };
             NewSketch();
             RefreshPorts();
         }
@@ -64,6 +65,7 @@ namespace ArduinoStudio7
             fileMenu.DropDownItems.Add("Отвори...", null, (s, e) => OpenFile());
             _recentFilesMenu = new ToolStripMenuItem("Последно отваряни файлове");
             fileMenu.DropDownItems.Add(_recentFilesMenu);
+            fileMenu.DropDownItems.Add("Възстанови предишната сесия", null, (s, e) => RestoreSession());
             fileMenu.DropDownItems.Add("Запиши  Ctrl+S", null, (s, e) => SaveFile());
             fileMenu.DropDownItems.Add("Запиши всички", null, (s, e) => SaveAllDocuments());
             fileMenu.DropDownItems.Add("Запиши като...", null, (s, e) => SaveFileAs());
@@ -524,6 +526,53 @@ namespace ArduinoStudio7
                 BackColor = Color.FromArgb(238, 242, 250), ForeColor = Color.FromArgb(30, 30, 30), Padding = new Padding(7,0,0,0) };
         }
 
+
+
+        // Съхранява пътищата на отворените файлове при изход, без да записва автоматично кода им.
+        private string SessionStorePath
+        {
+            get
+            {
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArduinoStudio7");
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                return Path.Combine(folder, "last-session.txt");
+            }
+        }
+
+        private void SaveSession()
+        {
+            try
+            {
+                var paths = _documents.TabPages.Cast<TabPage>()
+                    .Select(p => p.Tag as string)
+                    .Where(p => !String.IsNullOrWhiteSpace(p) && File.Exists(p))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                File.WriteAllLines(SessionStorePath, paths);
+            }
+            catch { /* Сесията е удобство и не трябва да блокира изхода. */ }
+        }
+
+        // Отваря отново файловете от последната сесия, като не дублира вече отворените табове.
+        private void RestoreSession()
+        {
+            try
+            {
+                if (!File.Exists(SessionStorePath))
+                {
+                    MessageBox.Show(this, "Няма запазена предишна сесия.", "Възстановяване", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                string[] paths = File.ReadAllLines(SessionStorePath).Where(File.Exists).ToArray();
+                if (paths.Length == 0)
+                {
+                    MessageBox.Show(this, "Файловете от предишната сесия вече не са налични.", "Възстановяване", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                foreach (string path in paths) LoadFile(path);
+                Log("Възстановени файлове от предишната сесия: " + paths.Length);
+            }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Грешка при възстановяване", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
 
         // Папка с настройките на потребителя; не променя файловете на проекта.
         private string RecentFilesStorePath
