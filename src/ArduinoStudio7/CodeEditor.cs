@@ -59,7 +59,7 @@ namespace ArduinoStudio7
             DetectUrls = false;
             HideSelection = false;
             // Отлагаме оцветяването, за да остане въвеждането плавно.
-            _highlightTimer.Interval = 350;
+            _highlightTimer.Interval = 700; // Не оцветяваме при всяко кратко спиране на курсора — пазим плавното писане и скролиране.
             _highlightTimer.Tick += delegate { _highlightTimer.Stop(); HighlightSyntax(); };
             TextChanged += delegate { _highlightTimer.Stop(); _highlightTimer.Start(); };
             MouseMove += EditorMouseMove;
@@ -154,36 +154,37 @@ namespace ArduinoStudio7
                 SelectionColor = Color.FromArgb(30, 30, 30);
 
                 // Препроцесорни директиви: #include, #define, #if и други.
-                ApplyColor(@"(?m)^\s*#\s*\w+.*$", Color.FromArgb(175, 90, 190));
+                string source = Text; // Единствено копие на текста за цялото оцветяване — избягваме повтарящи се копирания.
+                ApplyColor(source, @"(?m)^\s*#\s*\w+.*$", Color.FromArgb(175, 90, 190));
                 // Текстови константи и числа.
-                ApplyColor(@"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
-                ApplyColor(@"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
+                ApplyColor(source, @"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
+                ApplyColor(source, @"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
 
-                string source = Text;
+                // Един проход през идентификаторите; проверяваме следващия знак директно вместо да търсим наново остатъка от файла.
                 foreach (Match match in Regex.Matches(source, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
                 {
                     string word = match.Value;
+                    Color? tokenColor = null;
                     if (_keywords.Contains(word))
-                    {
-                        Select(match.Index, match.Length);
-                        // Ключови думи и Arduino константи — синьо.
-                        SelectionColor = Color.FromArgb(0, 0, 220);
-                    }
-                    else if (Regex.IsMatch(source.Substring(match.Index + match.Length), @"^\s*\("))
-                    {
-                        Select(match.Index, match.Length);
-                        // Имена на функции — кафяво/златисто.
-                        SelectionColor = Color.FromArgb(121, 94, 38);
-                    }
+                        tokenColor = Color.FromArgb(0, 0, 220); // Ключови думи и Arduino константи.
                     else if (Regex.IsMatch(word, @"^(?:uint\d+_t|int\d+_t|size_t|String|HardwareSerial)$"))
+                        tokenColor = Color.FromArgb(43, 145, 175); // Често използвани типове.
+                    else
+                    {
+                        int next = match.Index + match.Length;
+                        while (next < source.Length && Char.IsWhiteSpace(source[next])) next++;
+                        if (next < source.Length && source[next] == '(')
+                            tokenColor = Color.FromArgb(121, 94, 38); // Имена на функции.
+                    }
+
+                    if (tokenColor.HasValue)
                     {
                         Select(match.Index, match.Length);
-                        // Често използвани типове — синьо-зелено.
-                        SelectionColor = Color.FromArgb(43, 145, 175);
+                        SelectionColor = tokenColor.Value;
                     }
                 }
                 // Коментарите се оцветяват последни, за да запазят зеления цвят навсякъде.
-                ApplyColor(@"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
+                ApplyColor(source, @"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
 
                 // Връщаме избора и позицията на курсора.
                 Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - caret)));
@@ -197,9 +198,9 @@ namespace ArduinoStudio7
             }
         }
 
-        private void ApplyColor(string pattern, Color color)
+        private void ApplyColor(string source, string pattern, Color color)
         {
-            foreach (Match match in Regex.Matches(Text, pattern))
+            foreach (Match match in Regex.Matches(source, pattern))
             {
                 Select(match.Index, match.Length);
                 SelectionColor = color;
