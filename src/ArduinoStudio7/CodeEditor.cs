@@ -53,6 +53,9 @@ namespace ArduinoStudio7
             Styles[Style.Cpp.Character].ForeColor = Color.FromArgb(163, 21, 21);
             Styles[Style.Cpp.Word].ForeColor = Color.FromArgb(0, 0, 220);
             Styles[Style.Cpp.Word2].ForeColor = Color.FromArgb(43, 145, 175);
+            Styles[Style.Cpp.Function].ForeColor = Color.FromArgb(121, 94, 38);
+            Styles[Style.Cpp.Operator].ForeColor = Color.FromArgb(30, 30, 30);
+            Styles[Style.Cpp.Identifier].ForeColor = Color.FromArgb(30, 30, 30);
             Styles[Style.Cpp.Preprocessor].ForeColor = Color.FromArgb(175, 90, 190);
             SetKeywords(0, "void bool boolean byte char unsigned signed short int long float double const static volatile return if else for while do switch case break continue default struct class enum typedef sizeof true false nullptr HIGH LOW INPUT OUTPUT INPUT_PULLUP LED_BUILTIN pinMode digitalWrite digitalRead analogRead analogWrite delay delayMicroseconds millis micros attachInterrupt detachInterrupt Serial Serial1 Serial2 Serial3 begin println print setup loop PROGMEM String word size_t");
             SetKeywords(1, "uint8_t uint16_t uint32_t uint64_t int8_t int16_t int32_t int64_t HardwareSerial");
@@ -564,7 +567,8 @@ namespace ArduinoStudio7
             }
 
             string word = GetWordAt(index);
-            if (String.Equals(word, _lastHintWord, StringComparison.Ordinal)) return;
+            // Ако предишната подсказка е скрита, същата дума трябва да може да я покаже отново.
+            if (_hintVisible && String.Equals(word, _lastHintWord, StringComparison.Ordinal)) return;
 
             string tip = BuildHint(word);
             _lastHintWord = word;
@@ -634,6 +638,17 @@ namespace ArduinoStudio7
             // Такова търсене забавя скролиране при големи скечове; дефинициите
             // могат да се намерят надеждно с Ctrl+щракване или командата от менюто.
             if (_keywords.Contains(word)) return "Ключова дума или често използван Arduino символ: " + word;
+
+            // Търсим дефиниция на функция в текущия файл и показваме нейния ред като подсказка.
+            // Така подсказки има и за собствените функции на потребителя, не само за Arduino API.
+            string escaped = Regex.Escape(word);
+            Match declaration = Regex.Match(Text,
+                @"(?m)^\\s*(?<signature>(?:(?:static|inline|virtual|constexpr|extern)\\s+)*(?:[\\w:~*&<>]+\\s+)+" +
+                escaped + @"\\s*\\([^;{}]*\\)\\s*(?:const\\s*)?(?:\\{|;)");
+            if (declaration.Success)
+                return "Дефиниция/декларация в текущия файл:\\n" + declaration.Groups["signature"].Value.Trim();
+
+            // За неизвестен символ не показваме празна подсказка.
             return null;
         }
 
