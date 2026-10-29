@@ -24,7 +24,9 @@ namespace ArduinoStudio7
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private readonly ToolTip _hint = new ToolTip();
-        // Запомняме последната подсказка, за да не я показваме наново при всяко MouseMove.
+        // Подсказките се обработват само след като мишката остане неподвижна 2 секунди.
+        private readonly Timer _hintTimer = new Timer();
+        private Point _lastMousePoint;
         private string _lastHintWord = null;
         private string _lastHintText = null;
         private bool _hintVisible = false;
@@ -46,11 +48,13 @@ namespace ArduinoStudio7
         {
             // Настройваме моноширинен шрифт и цветове, наподобяващи Visual Studio.
             Font = new Font("Consolas", 10.0f);
-            // Задаваме стабилни времена на подсказките, без постоянно премигване.
-            _hint.InitialDelay = 450;
-            _hint.ReshowDelay = 250;
+            // ToolTip се показва ръчно след 2 секунди неподвижна мишка.
+            _hint.InitialDelay = 2000;
+            _hint.ReshowDelay = 2000;
             _hint.AutoPopDelay = 10000;
             _hint.ShowAlways = true;
+            _hintTimer.Interval = 2000;
+            _hintTimer.Tick += delegate { _hintTimer.Stop(); ShowHintForCurrentMousePosition(); };
             BackColor = Color.White;
             ForeColor = Color.FromArgb(30, 30, 30);
             BorderStyle = BorderStyle.None;
@@ -63,6 +67,7 @@ namespace ArduinoStudio7
             _highlightTimer.Tick += delegate { _highlightTimer.Stop(); HighlightSyntax(); };
             TextChanged += delegate { _highlightTimer.Stop(); _highlightTimer.Start(); };
             MouseMove += EditorMouseMove;
+            MouseLeave += delegate { _hintTimer.Stop(); HideHint(); };
             MouseDown += EditorMouseDown;
             KeyDown += EditorKeyDown;
             // Контекстно меню с често използвани команди за редактиране.
@@ -117,7 +122,7 @@ namespace ArduinoStudio7
             editorMenu.Items.Add("Намали шрифта", null, (s, e) => ChangeEditorFontSize(-1));
             editorMenu.Items.Add("Нормален размер на шрифта", null, (s, e) => ResetEditorFontSize());
             ContextMenuStrip = editorMenu;
-            Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
+            Disposed += delegate { _hint.Dispose(); _hintTimer.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
         }
 
         // Цветове на контекстното меню — светлосиньо маркиране като във Visual Studio 2019.
@@ -524,37 +529,48 @@ namespace ArduinoStudio7
 
         private void EditorMouseMove(object sender, MouseEventArgs e)
         {
-            // Ако курсорът е извън текста, скриваме подсказката само веднъж.
-            int index = GetCharIndexFromPosition(e.Location);
+            // При скролиране само рестартираме таймера; не търсим думи и не сканираме текста.
+            _lastMousePoint = e.Location;
+            _hintTimer.Stop();
+            _hintTimer.Start();
+            if (_hintVisible)
+            {
+                _hint.Hide(this);
+                _hintVisible = false;
+            }
+        }
+
+        // Изпълнява се само след 2 секунди неподвижна мишка.
+        private void ShowHintForCurrentMousePosition()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            int index = GetCharIndexFromPosition(_lastMousePoint);
             if (index < 0 || index >= TextLength)
             {
                 HideHint();
                 return;
             }
 
-            // Не преизчисляваме и не показваме повторно една и съща подсказка
-            // при всяко малко движение на мишката — това причиняваше премигване.
             string word = GetWordAt(index);
-            if (String.Equals(word, _lastHintWord, StringComparison.Ordinal))
-                return;
+            if (String.Equals(word, _lastHintWord, StringComparison.Ordinal)) return;
 
             string tip = BuildHint(word);
+            _lastHintWord = word;
+            _lastHintText = tip;
             if (String.IsNullOrEmpty(tip))
             {
                 HideHint();
-                _lastHintWord = word;
                 return;
             }
 
-            _lastHintWord = word;
-            _lastHintText = tip;
-            _hint.Show(tip, this, e.Location.X + 14, e.Location.Y + 18, 10000);
+            _hint.Show(tip, this, _lastMousePoint.X + 14, _lastMousePoint.Y + 18, 10000);
             _hintVisible = true;
         }
 
         // Скриваме подсказката и изчистваме кеша само при реална промяна на думата.
         private void HideHint()
         {
+            _hintTimer.Stop();
             if (_hintVisible) _hint.Hide(this);
             _hintVisible = false;
             _lastHintWord = null;
