@@ -602,11 +602,9 @@ namespace ArduinoStudio7
             };
             if (String.IsNullOrEmpty(word)) return null;
             if (docs.ContainsKey(word)) return docs[word];
-            // Търсим локална декларация на функция, променлива, тип или макрос.
-            Match declaration = Regex.Match(Text,
-                @"(?m)^\s*(?:#\s*define\s+|typedef\s+\w+\s+|(?:const\s+)?(?:static\s+)?(?:unsigned\s+)?(?:void|bool|boolean|byte|char|short|int|long|float|double|String|size_t|[A-Z]\w*)\s+)" +
-                Regex.Escape(word) + @"\b[^;\r\n]*(?:\{|;)?");
-            if (declaration.Success) return "Дефиниция в текущия файл:\n" + declaration.Value.Trim();
+            // Не сканираме целия файл при всяко движение на мишката.
+            // Такова търсене забавя скролиране при големи скечове; дефинициите
+            // могат да се намерят надеждно с Ctrl+щракване или командата от менюто.
             if (_keywords.Contains(word)) return "Ключова дума или често използван Arduino символ: " + word;
             return null;
         }
