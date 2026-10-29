@@ -276,7 +276,6 @@ namespace ArduinoStudio7
             _projectFilter.Font = new Font("Segoe UI", 9.0f);
             _projectFilter.BorderStyle = BorderStyle.FixedSingle;
             _projectFilter.ForeColor = Color.FromArgb(75, 85, 105);
-            _projectFilter.PlaceholderText = "Филтър по име или разширение...";
             _projectFilter.TextChanged += (s,e) => RefreshProjectTree();
             filterPanel.Controls.Add(_projectFilter);
 
@@ -1063,21 +1062,125 @@ namespace ArduinoStudio7
             }
         }
 
+        // Обновява дървото с реални папки, филтър и брояч на файловете.
         private void RefreshProjectTree()
         {
-            // Показваме файловете в текущата папка без да влизаме в build/cache папки.
-            _projectTree.Nodes.Clear();
-            if (String.IsNullOrEmpty(_projectFolder) || !Directory.Exists(_projectFolder))
+            _projectTree.BeginUpdate();
+            try
             {
-                if (!String.IsNullOrEmpty(_currentFile)) _projectTree.Nodes.Add(new TreeNode(Path.GetFileName(_currentFile)) { Tag = _currentFile });
-                return;
+                _projectTree.Nodes.Clear();
+                if (String.IsNullOrEmpty(_projectFolder) || !Directory.Exists(_projectFolder))
+                {
+                    if (!String.IsNullOrEmpty(_currentFile))
+                        _projectTree.Nodes.Add(new TreeNode(Path.GetFileName(_currentFile)) { Tag = _currentFile });
+                    _projectSummary.Text = "  Няма отворена папка на проект";
+                    return;
+                }
+
+                string rootPath = _projectFolder.TrimEnd(Path.DirectorySeparatorChar);
+                string filter = (_projectFilter.Text ?? "").Trim();
+                var allowed = Directory.GetFiles(rootPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => Regex.IsMatch(Path.GetExtension(f), @"^\.(ino|h|hpp|c|cpp)$", RegexOptions.IgnoreCase))
+                    .Where(f => !f.Split(Path.DirectorySeparatorChar).Any(part =>
+                        String.Equals(part, "build", StringComparison.OrdinalIgnoreCase) ||
+                        String.Equals(part, "bin", StringComparison.OrdinalIgnoreCase) ||
+                        String.Equals(part, "obj", StringComparison.OrdinalIgnoreCase) ||
+                        String.Equals(part, ".git", StringComparison.OrdinalIgnoreCase)))
+                    .Where(f => filter.Length == 0 || Path.GetFileName(f).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        Path.GetExtension(f).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        f.Substring(rootPath.Length).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToArray();
+
+                var root = new TreeNode(Path.GetFileName(rootPath)) { Tag = rootPath };
+                var folderNodes = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
+                folderNodes[rootPath] = root;
+                foreach (string file in allowed)
+                {
+                    string relative = file.Substring(rootPath.Length).TrimStart(Path.DirectorySeparatorChar);
+                    string[] parts = relative.Split(Path.DirectorySeparatorChar);
+                    string current = rootPath;
+                    TreeNode parent = root;
+                    for (int i = 0; i < parts.Length - 1; i++)
+                    {
+                        current = Path.Combine(current, parts[i]);
+                        TreeNode folder;
+                        if (!folderNodes.TryGetValue(current, out folder))
+                        {
+                            folder = new TreeNode(parts[i]) { Tag = current };
+                            folderNodes[current] = folder;
+                            parent.Nodes.Add(folder);
+                        }
+                        parent = folder;
+                    }
+                    parent.Nodes.Add(new TreeNode(parts[parts.Length - 1]) { Tag = file });
+                }
+                root.Expand();
+                _projectTree.Nodes.Add(root);
+                _projectSummary.Text = "  " + allowed.Length + " файла  •  " + folderNodes.Count + " папки";
             }
-            var root = new TreeNode(Path.GetFileName(_projectFolder)) { Tag = _projectFolder };
-            foreach (string file in Directory.GetFiles(_projectFolder, "*.*", SearchOption.AllDirectories)
-                .Where(f => Regex.IsMatch(Path.GetExtension(f), @"^\.(ino|h|hpp|c|cpp)$", RegexOptions.IgnoreCase))
-                .Where(f => !f.Contains(Path.DirectorySeparatorChar + "build" + Path.DirectorySeparatorChar)))
-                root.Nodes.Add(new TreeNode(file.Substring(_projectFolder.TrimEnd(Path.DirectorySeparatorChar).Length + 1)) { Tag = file });
-            root.Expand(); _projectTree.Nodes.Add(root);
+            catch (Exception ex)
+            {
+                _projectSummary.Text = "  Грешка при четене на проекта";
+                Log("Неуспешно обновяване на дървото: " + ex.Message);
+            }
+            finally { _projectTree.EndUpdate(); }
+        }
+
+        // Малки цветни бутони за често използваните действия в десния панел.
+        private Button SmallActionButton(string caption, EventHandler action)
+        {
+            var button = new Button
+            {
+                Text = caption, AutoSize = true, Height = 26, FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(255, 255, 255), ForeColor = Color.FromArgb(55, 78, 118),
+                Font = new Font("Segoe UI", 8.0f, FontStyle.Bold),
+                Margin = new Padding(2, 0, 3, 0), Padding = new Padding(5, 1, 5, 1),
+                Cursor = Cursors.Hand
+            };
+            button.FlatAppearance.BorderColor = Color.FromArgb(205, 216, 235);
+            button.Click += action;
+            return button;
+        }
+
+        // Показва подробности за избрания файл или директория в долния десен панел.
+        private void UpdateProjectProperties(string path)
+        {
+            if (_projectProperties == null || _projectProperties.IsDisposed) return;
+            _projectProperties.BeginUpdate();
+            try
+            {
+                _projectProperties.Items.Clear();
+                if (String.IsNullOrEmpty(path))
+                {
+                    AddProperty("Проект", String.IsNullOrEmpty(_projectFolder) ? "Няма" : Path.GetFileName(_projectFolder));
+                    AddProperty("Платка", _board.Text);
+                    AddProperty("COM порт", _port.Text);
+                    return;
+                }
+                AddProperty("Име", Path.GetFileName(path));
+                AddProperty("Тип", Directory.Exists(path) ? "Папка" : Path.GetExtension(path).ToUpperInvariant());
+                AddProperty("Път", path);
+                if (File.Exists(path))
+                {
+                    var info = new FileInfo(path);
+                    AddProperty("Размер", info.Length.ToString("N0") + " байта");
+                    AddProperty("Променен", info.LastWriteTime.ToString("yyyy-MM-dd HH:mm"));
+                    AddProperty("Редове", File.ReadAllLines(path).Length.ToString());
+                }
+                else if (Directory.Exists(path))
+                    AddProperty("Файлове", Directory.GetFiles(path, "*.*", SearchOption.TopDirectoryOnly).Length.ToString());
+                AddProperty("Платка", _board.Text);
+            }
+            catch (Exception ex) { AddProperty("Грешка", ex.Message); }
+            finally { _projectProperties.EndUpdate(); }
+        }
+
+        // Добавя един ред към списъка с подробности.
+        private void AddProperty(string name, string value)
+        {
+            var item = new ListViewItem(name);
+            item.SubItems.Add(value ?? "");
+            _projectProperties.Items.Add(item);
         }
 
         // Откриваме копие на LiquidCrystal.cpp в самата папка на скеча.
