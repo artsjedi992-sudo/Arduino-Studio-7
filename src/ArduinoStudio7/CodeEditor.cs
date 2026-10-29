@@ -95,6 +95,20 @@ namespace ArduinoStudio7
             templates.DropDownItems.Add("pinMode()", null, (s, e) => InsertTemplate("pinMode(LED_BUILTIN, OUTPUT);"));
             templates.DropDownItems.Add("digitalWrite()", null, (s, e) => InsertTemplate("digitalWrite(LED_BUILTIN, HIGH);"));
             editorMenu.Items.Add(templates);
+            editorMenu.Items.Add(new ToolStripSeparator());
+            // Допълнителни инструменти за по-бърза редакция на големи скечове.
+            editorMenu.Items.Add("Премести ред нагоре", null, (s, e) => MoveCurrentLine(-1));
+            editorMenu.Items.Add("Премести ред надолу", null, (s, e) => MoveCurrentLine(1));
+            editorMenu.Items.Add("Почисти празните интервали в края на редовете", null, (s, e) => TrimTrailingWhitespace());
+            editorMenu.Items.Add("Сортирай избраните редове", null, (s, e) => SortSelectedLines());
+            editorMenu.Items.Add("Главни букви", null, (s, e) => ChangeSelectionCase(true));
+            editorMenu.Items.Add("Малки букви", null, (s, e) => ChangeSelectionCase(false));
+            editorMenu.Items.Add("Вмъкни дата и час", null, (s, e) => InsertDateTime());
+            editorMenu.Items.Add(new ToolStripSeparator());
+            editorMenu.Items.Add("Пренасяне на дългите редове", null, (s, e) => ToggleWordWrap());
+            editorMenu.Items.Add("Увеличи шрифта", null, (s, e) => ChangeEditorFontSize(1));
+            editorMenu.Items.Add("Намали шрифта", null, (s, e) => ChangeEditorFontSize(-1));
+            editorMenu.Items.Add("Нормален размер на шрифта", null, (s, e) => ResetEditorFontSize());
             ContextMenuStrip = editorMenu;
             Disposed += delegate { _hint.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
         }
@@ -525,6 +539,94 @@ namespace ArduinoStudio7
             if (declaration.Success) return "Дефиниция в текущия файл:\n" + declaration.Value.Trim();
             if (_keywords.Contains(word)) return "Ключова дума или често използван Arduino символ: " + word;
             return null;
+        }
+
+        // Премества текущия ред нагоре или надолу, като запазва позицията на каретката.
+        public void MoveCurrentLine(int direction)
+        {
+            int line = GetLineFromCharIndex(SelectionStart);
+            int target = line + direction;
+            if (target < 0 || target >= Lines.Length) return;
+            int start = GetFirstCharIndexFromLine(line);
+            int end = line + 1 < Lines.Length ? GetFirstCharIndexFromLine(line + 1) : TextLength;
+            int targetStart = GetFirstCharIndexFromLine(target);
+            int targetEnd = target + 1 < Lines.Length ? GetFirstCharIndexFromLine(target + 1) : TextLength;
+            if (start < 0 || targetStart < 0) return;
+            string current = Text.Substring(start, end - start);
+            string other = Text.Substring(targetStart, targetEnd - targetStart);
+            int newStart = direction < 0 ? targetStart : start;
+            Select(Math.Min(start, targetStart), Math.Abs(end - targetStart));
+            SelectedText = direction < 0 ? current + other : other + current;
+            int movedStart = direction < 0 ? targetStart : targetStart;
+            Select(Math.Max(0, movedStart), 0);
+            ScrollToCaret();
+        }
+
+        // Премахва интервалите и табулациите в края на всеки ред, без да променя отстъпите.
+        public void TrimTrailingWhitespace()
+        {
+            int caret = SelectionStart;
+            int selectionLength = SelectionLength;
+            string[] lines = Text.Replace("\r\n", "\n").Split('\n');
+            for (int i = 0; i < lines.Length; i++) lines[i] = lines[i].TrimEnd(' ', '\t', '\r');
+            string cleaned = String.Join(Environment.NewLine, lines);
+            Text = cleaned;
+            Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - Math.Min(caret, TextLength)));
+        }
+
+        // Сортира азбучно избраните редове; ако няма избор, обработва текущия ред.
+        public void SortSelectedLines()
+        {
+            int selectionStart = SelectionStart;
+            int selectionEnd = SelectionStart + SelectionLength;
+            int first = GetLineFromCharIndex(selectionStart);
+            int last = GetLineFromCharIndex(Math.Max(selectionStart, selectionEnd - 1));
+            int start = GetFirstCharIndexFromLine(first);
+            int end = last + 1 < Lines.Length ? GetFirstCharIndexFromLine(last + 1) : TextLength;
+            if (start < 0 || end < start) return;
+            string block = Text.Substring(start, end - start);
+            string[] lines = block.Replace("\r\n", "\n").Split('\n');
+            Array.Sort(lines, StringComparer.OrdinalIgnoreCase);
+            string sorted = String.Join(Environment.NewLine, lines);
+            Select(start, end - start);
+            SelectedText = sorted;
+            Select(start, Math.Min(sorted.Length, TextLength - start));
+        }
+
+        // Преобразува само маркирания текст, без да засяга останалия код.
+        public void ChangeSelectionCase(bool upper)
+        {
+            if (SelectionLength == 0) return;
+            string selected = SelectedText;
+            int start = SelectionStart;
+            SelectedText = upper ? selected.ToUpperInvariant() : selected.ToLowerInvariant();
+            Select(start, Math.Min(SelectedText.Length, TextLength - start));
+        }
+
+        // Вмъква текущата дата и час като текст, удобен за коментар в кода.
+        public void InsertDateTime()
+        {
+            SelectedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        // Превключва визуалното пренасяне на дългите редове.
+        public void ToggleWordWrap()
+        {
+            WordWrap = !WordWrap;
+            ScrollToCaret();
+        }
+
+        // Променя размера на шрифта в разумни граници.
+        public void ChangeEditorFontSize(float delta)
+        {
+            float size = Math.Max(7.0f, Math.Min(24.0f, Font.Size + delta));
+            Font = new Font(Font.FontFamily, size, Font.Style);
+        }
+
+        // Връща стандартния размер на шрифта.
+        public void ResetEditorFontSize()
+        {
+            Font = new Font("Consolas", 10.0f);
         }
     }
 }
