@@ -984,6 +984,7 @@ namespace ArduinoStudio7
             _documents.TabPages.Add(page);
             _documents.SelectedTab = page;
             ActivateSelectedDocument();
+            editor.RefreshSyntaxHighlighting(); // Принудително възстановяваме цветовете и при първоначално зареждане на файла.
         }
 
         // Активира избрания таб и синхронизира текущия файл, заглавието и статусната лента.
