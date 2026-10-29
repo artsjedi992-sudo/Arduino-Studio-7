@@ -751,6 +751,7 @@ namespace ArduinoStudio7
             _tabEditors[page] = editor;
             _savedTexts[page] = editor.Text;
             editor.FindRequested += (s, e) => FindInEditor();
+            editor.BookmarksChanged += (s, e) => gutter.Invalidate();
             editor.TextChanged += (s, e) => { UpdateTabTitle(page); if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
             editor.SelectionChanged += (s, e) => { if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
             editor.Resize += (s, e) => gutter.Invalidate();
@@ -862,6 +863,11 @@ namespace ArduinoStudio7
                         if (first < 0) continue;
                         Point pos = _code.GetPositionFromCharIndex(first);
                         if (pos.Y < -font.Height || pos.Y > Height) continue;
+                        if (_code.IsBookmarked(line))
+                        {
+                            using (var marker = new SolidBrush(Color.FromArgb(220, 70, 55)))
+                                e.Graphics.FillEllipse(marker, 3, pos.Y + 4, 8, 8);
+                        }
                         string number = (line + 1).ToString();
                         SizeF size = e.Graphics.MeasureString(number, font);
                         e.Graphics.DrawString(number, font, brush, Width - size.Width - 7, pos.Y + 1);
