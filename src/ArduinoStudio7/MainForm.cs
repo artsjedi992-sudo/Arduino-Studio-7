@@ -81,6 +81,18 @@ namespace ArduinoStudio7
             editMenu.DropDownItems.Add(new ToolStripSeparator());
             editMenu.DropDownItems.Add("Дублирай ред / избран текст   Ctrl+D", null, (s, e) => _editor.DuplicateCurrentLineOrSelection());
             editMenu.DropDownItems.Add("Коментирай / разкоментирай   Ctrl+/", null, (s, e) => _editor.ToggleCommentSelection());
+            editMenu.DropDownItems.Add("Премести ред нагоре", null, (s, e) => _editor.MoveCurrentLine(-1));
+            editMenu.DropDownItems.Add("Премести ред надолу", null, (s, e) => _editor.MoveCurrentLine(1));
+            editMenu.DropDownItems.Add("Почисти празните интервали в края на редовете", null, (s, e) => _editor.TrimTrailingWhitespace());
+            editMenu.DropDownItems.Add("Сортирай избраните редове", null, (s, e) => _editor.SortSelectedLines());
+            editMenu.DropDownItems.Add("Главни букви", null, (s, e) => _editor.ChangeSelectionCase(true));
+            editMenu.DropDownItems.Add("Малки букви", null, (s, e) => _editor.ChangeSelectionCase(false));
+            editMenu.DropDownItems.Add("Вмъкни дата и час", null, (s, e) => _editor.InsertDateTime());
+            editMenu.DropDownItems.Add(new ToolStripSeparator());
+            editMenu.DropDownItems.Add("Пренасяне на дългите редове", null, (s, e) => _editor.ToggleWordWrap());
+            editMenu.DropDownItems.Add("Увеличи шрифта", null, (s, e) => _editor.ChangeEditorFontSize(1));
+            editMenu.DropDownItems.Add("Намали шрифта", null, (s, e) => _editor.ChangeEditorFontSize(-1));
+            editMenu.DropDownItems.Add("Нормален размер на шрифта", null, (s, e) => _editor.ResetEditorFontSize());
             // Меню „Проект“ събира операции върху папката и файловете в нея.
             var projectMenu = new ToolStripMenuItem("Проект");
             projectMenu.DropDownItems.Add("Отвори папка на проекта...", null, (s, e) => OpenProjectFolder());
