@@ -11,18 +11,6 @@ namespace ArduinoStudio7
     // Редактор в светлата цветова схема на Visual Studio 2019, с оцветяване и подсказки.
     public sealed class CodeEditor : Scintilla
     {
-        // Win32 съобщения за запазване на видимия ред при оцветяване.
-        private const int WM_SETREDRAW = 0x000B;
-        private const int EM_GETSCROLLPOS = 0x04DD;
-        private const int EM_SETSCROLLPOS = 0x04DE;
-
-        // Точка за запазване на точната хоризонтална и вертикална позиция на скрола.
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-        private struct NativePoint { public int X; public int Y; }
-
-        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref NativePoint point);
-        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
         private readonly ToolTip _hint = new ToolTip();
         // Подсказките се обработват само след като мишката остане неподвижна 2 секунди.
         private readonly Timer _hintTimer = new Timer();
@@ -32,6 +20,9 @@ namespace ArduinoStudio7
         private bool _hintVisible = false;
         private readonly ContextMenuStrip _completionMenu = new ContextMenuStrip();
         private readonly HashSet<int> _bookmarks = new HashSet<int>(); // Отметки редове за навигация в текущия файл.
+        public event EventHandler SelectionChanged;
+        private int _lastReportedSelectionStart = -1;
+        private int _lastReportedSelectionEnd = -1;
         private readonly HashSet<string> _keywords = new HashSet<string>(StringComparer.Ordinal)
         {
             "void","bool","boolean","byte","char","unsigned","signed","short","int","long","float","double",
@@ -75,6 +66,15 @@ namespace ArduinoStudio7
             _hint.ShowAlways = true;
             _hintTimer.Interval = 2000;
             _hintTimer.Tick += delegate { _hintTimer.Stop(); ShowHintForCurrentMousePosition(); };
+            UpdateUI += delegate
+            {
+                if (SelectionStart != _lastReportedSelectionStart || SelectionEnd != _lastReportedSelectionEnd)
+                {
+                    _lastReportedSelectionStart = SelectionStart;
+                    _lastReportedSelectionEnd = SelectionEnd;
+                    SelectionChanged?.Invoke(this, EventArgs.Empty);
+                }
+            };
             BackColor = Color.White;
             ForeColor = Color.FromArgb(30, 30, 30);
             BorderStyle = BorderStyle.None;
