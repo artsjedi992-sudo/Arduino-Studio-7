@@ -636,11 +636,15 @@ namespace ArduinoStudio7
 
 
         // Поставя или маха отметка на текущия ред; отметките са отделни за всеки отворен файл.
+        public event EventHandler BookmarksChanged;
+        public bool IsBookmarked(int zeroBasedLine) { return _bookmarks.Contains(zeroBasedLine); }
+
         public void ToggleBookmark()
         {
             int line = GetLineFromCharIndex(SelectionStart);
             if (!_bookmarks.Add(line)) _bookmarks.Remove(line);
             _bookmarks.RemoveWhere(n => n < 0 || n >= Lines.Length);
+            BookmarksChanged?.Invoke(this, EventArgs.Empty);
         }
 
         // Преминава към следващата отметка и започва от първата след края.
@@ -654,7 +658,7 @@ namespace ArduinoStudio7
         }
 
         // Изтрива всички отметки в текущия редактор.
-        public void ClearBookmarks() { _bookmarks.Clear(); }
+        public void ClearBookmarks() { _bookmarks.Clear(); BookmarksChanged?.Invoke(this, EventArgs.Empty); }
 
         // Отстъпва или прибира маркираните редове, без да променя останалия текст.
         public void IndentSelection(bool indent)
