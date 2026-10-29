@@ -187,11 +187,23 @@ namespace ArduinoStudio7
             set { WrapMode = value ? ScintillaNET.WrapMode.Word : ScintillaNET.WrapMode.None; }
         }
 
-        public new void Select(int start, int length)
+        public void Select(int start, int length)
         {
             int safeStart = Math.Max(0, Math.Min(start, TextLength));
             int safeEnd = Math.Max(safeStart, Math.Min(safeStart + Math.Max(0, length), TextLength));
             SetSelection(safeStart, safeEnd);
+        }
+
+        // Заменя маркирания текст чрез нативните Target/ReplaceTarget API.
+        private void SetSelectedText(string value)
+        {
+            if (value == null) value = String.Empty;
+            int start = Math.Min(SelectionStart, SelectionEnd);
+            int end = Math.Max(SelectionStart, SelectionEnd);
+            TargetStart = start;
+            TargetEnd = end;
+            ReplaceTarget(value);
+            SetSelection(start + value.Length, start + value.Length);
         }
 
         public int GetLineFromCharIndex(int charIndex)
@@ -202,7 +214,7 @@ namespace ArduinoStudio7
         public int GetFirstCharIndexFromLine(int line)
         {
             if (line < 0 || line >= Lines.Length) return -1;
-            return Lines[line].Position;
+            return PositionFromLine(line);
         }
 
         public int GetCharIndexFromPosition(Point point)
@@ -226,7 +238,7 @@ namespace ArduinoStudio7
                 string indent = Regex.Match(previousLine, @"^\s*").Value;
                 if (previousLine.TrimEnd().EndsWith("{")) indent += "    ";
                 e.SuppressKeyPress = true;
-                SelectedText = Environment.NewLine + indent;
+                SetSelectedText(Environment.NewLine + indent);
                 return;
             }
 
@@ -323,7 +335,7 @@ namespace ArduinoStudio7
         // Вмъква избран шаблон на мястото на курсора или вместо маркирания текст.
         private void InsertTemplate(string template)
         {
-            SelectedText = template;
+            SetSelectedText(template);
             Focus();
         }
 
@@ -334,7 +346,7 @@ namespace ArduinoStudio7
             {
                 string selected = SelectedText;
                 int start = SelectionStart;
-                SelectedText = selected + selected;
+                SetSelectedText(selected + selected);
                 Select(start + selected.Length, selected.Length);
                 return;
             }
@@ -345,7 +357,7 @@ namespace ArduinoStudio7
             int endIndex = line + 1 < Lines.Length ? GetFirstCharIndexFromLine(line + 1) : TextLength;
             string lineText = Text.Substring(startIndex, endIndex - startIndex);
             Select(endIndex, 0);
-            SelectedText = lineText;
+            SetSelectedText(lineText);
             Select(startIndex, lineText.Length);
         }
 
@@ -354,8 +366,8 @@ namespace ArduinoStudio7
         {
             if (String.IsNullOrEmpty(searchText)) return false;
             int start = Math.Min(SelectionStart + SelectionLength, TextLength);
-            int found = Find(searchText, start, RichTextBoxFinds.None);
-            if (found < 0 && start > 0) found = Find(searchText, 0, RichTextBoxFinds.None);
+            int found = Text.IndexOf(searchText, start, StringComparison.OrdinalIgnoreCase);
+            if (found < 0 && start > 0) found = Text.IndexOf(searchText, 0, StringComparison.OrdinalIgnoreCase);
             if (found >= 0) { Select(found, searchText.Length); ScrollToCaret(); Focus(); return true; }
             return false;
         }
@@ -404,7 +416,7 @@ namespace ArduinoStudio7
             }
             string result = String.Join(Environment.NewLine, lines);
             Select(start, end - start);
-            SelectedText = result;
+            SetSelectedText(result);
             Select(start, Math.Min(result.Length, TextLength - start));
         }
 
@@ -456,7 +468,7 @@ namespace ArduinoStudio7
                 {
                     // Заменяме написания префикс, вместо да дублираме текста пред курсора.
                     Select(prefixStart, caretIndex - prefixStart);
-                    SelectedText = insertion;
+                    SetSelectedText(insertion);
                     Focus();
                 });
             }
@@ -465,7 +477,7 @@ namespace ArduinoStudio7
             {
                 _completionMenu.Items.Add("Няма съвпадения", null, null).Enabled = false;
             }
-            Point caret = GetPositionFromCharIndex(SelectionStart);
+            Point caret = PointFromPosition(SelectionStart);
             _completionMenu.Show(this, caret);
         }
 
@@ -639,7 +651,7 @@ namespace ArduinoStudio7
             if (direction < 0) swapped = second + Environment.NewLine + first;
             else swapped = second + Environment.NewLine + first;
             Select(start, end - start);
-            SelectedText = swapped + (pair.Length > 2 ? Environment.NewLine + String.Join(Environment.NewLine, pair.Skip(2).ToArray()) : "");
+            SetSelectedText(swapped + (pair.Length > 2 ? Environment.NewLine + String.Join(Environment.NewLine, pair.Skip(2).ToArray()) : ""));
             Select(start, 0);
             ScrollToCaret();
         }
@@ -671,7 +683,7 @@ namespace ArduinoStudio7
             Array.Sort(lines, StringComparer.OrdinalIgnoreCase);
             string sorted = String.Join(Environment.NewLine, lines);
             Select(start, end - start);
-            SelectedText = sorted;
+            SetSelectedText(sorted);
             Select(start, Math.Min(sorted.Length, TextLength - start));
         }
 
@@ -681,14 +693,14 @@ namespace ArduinoStudio7
             if (SelectionLength == 0) return;
             string selected = SelectedText;
             int start = SelectionStart;
-            SelectedText = upper ? selected.ToUpperInvariant() : selected.ToLowerInvariant();
+            SetSelectedText(upper ? selected.ToUpperInvariant() : selected.ToLowerInvariant());
             Select(start, Math.Min(SelectedText.Length, TextLength - start));
         }
 
         // Вмъква текущата дата и час като текст, удобен за коментар в кода.
         public void InsertDateTime()
         {
-            SelectedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            SetSelectedText(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         }
 
 
@@ -734,7 +746,7 @@ namespace ArduinoStudio7
                 else if (lines[i].StartsWith("\t")) lines[i] = lines[i].Substring(1);
             }
             string result = String.Join(Environment.NewLine, lines);
-            Select(start, end - start); SelectedText = result;
+            Select(start, end - start); SetSelectedText(result);
             Select(Math.Min(startPos + (indent ? 4 : 0), TextLength), Math.Min(selectionEnd - startPos, Math.Max(0, TextLength - startPos)));
         }
 
@@ -745,8 +757,8 @@ namespace ArduinoStudio7
             if (length == 0) { MessageBox.Show(this, "Първо маркирайте блока код.", "Блоков коментар", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
             string selected = SelectedText;
             if (selected.StartsWith("/*") && selected.EndsWith("*/") && selected.Length >= 4)
-                SelectedText = selected.Substring(2, selected.Length - 4);
-            else SelectedText = "/*" + selected + "*/";
+                SetSelectedText(selected.Substring(2, selected.Length - 4));
+            else SetSelectedText("/*" + selected + "*/");
             Select(start, Math.Min(TextLength - start, length + 4));
         }
 
