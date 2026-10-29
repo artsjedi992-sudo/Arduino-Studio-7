@@ -214,7 +214,14 @@ namespace ArduinoStudio7
         public int GetFirstCharIndexFromLine(int line)
         {
             if (line < 0 || line >= Lines.Length) return -1;
-            return PositionFromLine(line);
+            return base.Lines[line].Position;
+        }
+
+        // Връща координатите на дадена позиция в документа спрямо контролата.
+        public Point GetPositionFromCharIndex(int charIndex)
+        {
+            int safePosition = Math.Max(0, Math.Min(charIndex, TextLength));
+            return new Point(PointXFromPosition(safePosition), PointYFromPosition(safePosition));
         }
 
         public int GetCharIndexFromPosition(Point point)
@@ -477,7 +484,7 @@ namespace ArduinoStudio7
             {
                 _completionMenu.Items.Add("Няма съвпадения", null, null).Enabled = false;
             }
-            Point caret = PointFromPosition(SelectionStart);
+            Point caret = GetPositionFromCharIndex(SelectionStart);
             _completionMenu.Show(this, caret);
         }
 
