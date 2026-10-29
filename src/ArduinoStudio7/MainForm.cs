@@ -77,6 +77,7 @@ namespace ArduinoStudio7
             // Меню за редактиране, търсене и навигация в кода.
             var editMenu = new ToolStripMenuItem("Редактиране");
             editMenu.DropDownItems.Add("Намери следващо...   Ctrl+F", null, (s, e) => FindInEditor());
+            editMenu.DropDownItems.Add("Търси във всички файлове на проекта...", null, (s, e) => FindInProjectFiles());
             editMenu.DropDownItems.Add("Замени всички...", null, (s, e) => ReplaceInEditor());
             editMenu.DropDownItems.Add("Отиди на ред...   Ctrl+G", null, (s, e) => GoToEditorLine());
             editMenu.DropDownItems.Add("Списък на функциите / символите", null, (s, e) => ShowCodeSymbols());
@@ -105,6 +106,7 @@ namespace ArduinoStudio7
             var projectMenu = new ToolStripMenuItem("Проект");
             projectMenu.DropDownItems.Add("Отвори папка на проекта...", null, (s, e) => OpenProjectFolder());
             projectMenu.DropDownItems.Add("Обнови дървото на проекта", null, (s, e) => RefreshProjectTree());
+            projectMenu.DropDownItems.Add("Търси във всички файлове на проекта...", null, (s, e) => FindInProjectFiles());
             projectMenu.DropDownItems.Add(new ToolStripSeparator());
             projectMenu.DropDownItems.Add("Нов .ino файл...", null, (s, e) => CreateProjectFile(".ino"));
             projectMenu.DropDownItems.Add("Нов C++ файл...", null, (s, e) => CreateProjectFile(".cpp"));
@@ -561,6 +563,85 @@ namespace ArduinoStudio7
                 go.Click += (s, e) => navigate();
                 dialog.Controls.Add(list);
                 dialog.Controls.Add(go);
+                dialog.ShowDialog(this);
+            }
+        }
+
+
+        // Търси текст рекурсивно в .ino/.cpp/.h файловете на проекта и позволява преход към резултат.
+        private void FindInProjectFiles()
+        {
+            string root = _projectFolder;
+            if (String.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            {
+                using (var choose = new FolderBrowserDialog())
+                {
+                    choose.Description = "Изберете папката на Arduino проекта";
+                    if (choose.ShowDialog(this) != DialogResult.OK) return;
+                    root = choose.SelectedPath;
+                }
+            }
+            using (var dialog = new Form())
+            using (var query = new TextBox())
+            using (var caseSensitive = new CheckBox())
+            using (var search = new Button())
+            using (var results = new ListBox())
+            {
+                dialog.Text = "Търсене в проекта";
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.Size = new Size(850, 520);
+                dialog.MinimizeBox = false; dialog.MaximizeBox = true;
+                query.SetBounds(12, 12, 560, 26);
+                query.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                caseSensitive.Text = "С главни/малки букви"; caseSensitive.SetBounds(580, 14, 160, 24);
+                caseSensitive.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                search.Text = "Търси"; search.SetBounds(745, 11, 75, 28);
+                search.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                results.SetBounds(12, 48, 808, 420);
+                results.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+                results.HorizontalScrollbar = true;
+                var foundPaths = new List<string>();
+                var foundLines = new List<int>();
+                Action runSearch = () =>
+                {
+                    results.Items.Clear(); foundPaths.Clear(); foundLines.Clear();
+                    if (String.IsNullOrEmpty(query.Text)) return;
+                    try
+                    {
+                        string[] files = Directory.GetFiles(root, "*.*", SearchOption.AllDirectories)
+                            .Where(p => new[] { ".ino", ".cpp", ".h", ".c", ".hpp" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
+                            .Where(p => !p.Split(Path.DirectorySeparatorChar).Any(part => part == ".git" || part == "build" || part == "bin" || part == "obj"))
+                            .ToArray();
+                        StringComparison comparison = caseSensitive.Checked ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+                        foreach (string file in files)
+                        {
+                            string[] lines;
+                            try { lines = File.ReadAllLines(file); } catch { continue; }
+                            for (int i = 0; i < lines.Length; i++)
+                                if (lines[i].IndexOf(query.Text, comparison) >= 0)
+                                {
+                                    foundPaths.Add(file); foundLines.Add(i + 1);
+                                    results.Items.Add(Path.GetFileName(file) + "  (ред " + (i + 1) + "): " + lines[i].Trim());
+                                }
+                        }
+                        dialog.Text = "Търсене в проекта — намерени: " + results.Items.Count;
+                    }
+                    catch (Exception ex) { MessageBox.Show(dialog, ex.Message, "Грешка при търсене", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                };
+                search.Click += (s, e) => runSearch();
+                query.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; runSearch(); } };
+                Action openResult = () =>
+                {
+                    int index = results.SelectedIndex;
+                    if (index < 0 || index >= foundPaths.Count) return;
+                    string path = foundPaths[index]; int line = foundLines[index];
+                    LoadFile(path);
+                    if (_editor != null) _editor.GoToLine(line);
+                    dialog.Close();
+                };
+                results.DoubleClick += (s, e) => openResult();
+                dialog.Controls.AddRange(new Control[] { query, caseSensitive, search, results });
+                dialog.AcceptButton = search;
                 dialog.ShowDialog(this);
             }
         }
