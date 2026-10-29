@@ -201,19 +201,19 @@ namespace ArduinoStudio7
                 SelectionColor = Color.FromArgb(30, 30, 30);
 
                 // Препроцесорни директиви.
-                ApplyColor(source, start, @"(?m)^\\s*#\\s*\\w+.*$", Color.FromArgb(175, 90, 190));
+                ApplyColor(source, start, @"(?m)^\s*#\s*\w+.*$", Color.FromArgb(175, 90, 190));
                 // Текстови константи и числа.
-                ApplyColor(source, start, @"(?:""(?:\\\\.|[^""\\\\])*""|'(?:\\\\.|[^'\\\\])*')", Color.FromArgb(163, 21, 21));
-                ApplyColor(source, start, @"\\b\\d+(?:\\.\\d+)?\\b", Color.FromArgb(9, 134, 88));
+                ApplyColor(source, start, @"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
+                ApplyColor(source, start, @"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
 
                 // Оцветяваме ключови думи, типове и имена на функции само в този видим диапазон.
-                foreach (Match match in Regex.Matches(source, @"\\b[A-Za-z_][A-Za-z0-9_]*\\b"))
+                foreach (Match match in Regex.Matches(source, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
                 {
                     string word = match.Value;
                     Color? tokenColor = null;
                     if (_keywords.Contains(word))
                         tokenColor = Color.FromArgb(0, 0, 220);
-                    else if (Regex.IsMatch(word, @"^(?:uint\\d+_t|int\\d+_t|size_t|String|HardwareSerial)$"))
+                    else if (Regex.IsMatch(word, @"^(?:uint\d+_t|int\d+_t|size_t|String|HardwareSerial)$"))
                         tokenColor = Color.FromArgb(43, 145, 175);
                     else
                     {
@@ -231,7 +231,7 @@ namespace ArduinoStudio7
                 }
 
                 // Коментарите са последни, за да останат зелени независимо от останалите правила.
-                ApplyColor(source, start, @"//[^\\r\\n]*|/\\*[\\s\\S]*?\\*/", Color.FromArgb(0, 128, 0));
+                ApplyColor(source, start, @"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
 
                 // Връщаме маркирането и каретката, без да променяме позицията на скрола.
                 Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - caret)));
