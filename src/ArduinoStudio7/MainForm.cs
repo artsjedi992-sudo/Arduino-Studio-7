@@ -22,6 +22,8 @@ namespace ArduinoStudio7
         private readonly TextBox _projectFilter = new TextBox();
         private readonly Label _projectSummary = new Label();
         private readonly ListView _projectProperties = new ListView();
+        private readonly List<string> _recentFiles = new List<string>();
+        private ToolStripMenuItem _recentFilesMenu;
         private readonly RichTextBox _output = new RichTextBox();
         private readonly ComboBox _board = new ComboBox();
         private readonly ComboBox _port = new ComboBox();
@@ -43,7 +45,9 @@ namespace ArduinoStudio7
             WindowState = FormWindowState.Maximized;
             BackColor = Color.FromArgb(238, 242, 250); // Светъл синьо-сив фон като Visual Studio 2019.
             ForeColor = Color.FromArgb(30, 30, 30);
+            LoadRecentFiles();
             BuildInterface();
+            RefreshRecentFilesMenu();
             FormClosing += ConfirmCloseWithUnsavedDocuments;
             NewSketch();
             RefreshPorts();
@@ -58,6 +62,8 @@ namespace ArduinoStudio7
             var fileMenu = new ToolStripMenuItem("Файл");
             fileMenu.DropDownItems.Add("Нов скеч", null, (s, e) => NewSketch());
             fileMenu.DropDownItems.Add("Отвори...", null, (s, e) => OpenFile());
+            _recentFilesMenu = new ToolStripMenuItem("Последно отваряни файлове");
+            fileMenu.DropDownItems.Add(_recentFilesMenu);
             fileMenu.DropDownItems.Add("Запиши  Ctrl+S", null, (s, e) => SaveFile());
             fileMenu.DropDownItems.Add("Запиши всички", null, (s, e) => SaveAllDocuments());
             fileMenu.DropDownItems.Add("Запиши като...", null, (s, e) => SaveFileAs());
@@ -518,6 +524,81 @@ namespace ArduinoStudio7
                 BackColor = Color.FromArgb(238, 242, 250), ForeColor = Color.FromArgb(30, 30, 30), Padding = new Padding(7,0,0,0) };
         }
 
+
+        // Папка с настройките на потребителя; не променя файловете на проекта.
+        private string RecentFilesStorePath
+        {
+            get
+            {
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArduinoStudio7");
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                return Path.Combine(folder, "recent-files.txt");
+            }
+        }
+
+        // Зарежда списъка с последните файлове, като пропуска изтрити или недостъпни пътища.
+        private void LoadRecentFiles()
+        {
+            try
+            {
+                string path = RecentFilesStorePath;
+                if (!File.Exists(path)) return;
+                foreach (string item in File.ReadAllLines(path))
+                    if (File.Exists(item) && !_recentFiles.Contains(item, StringComparer.OrdinalIgnoreCase))
+                        _recentFiles.Add(item);
+                if (_recentFiles.Count > 12) _recentFiles.RemoveRange(12, _recentFiles.Count - 12);
+            }
+            catch { /* Списъкът е помощна функция; грешка тук не трябва да спира стартирането. */ }
+        }
+
+        // Поставя файла най-отгоре и записва последните 12 пътя.
+        private void AddRecentFile(string path)
+        {
+            if (String.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
+            _recentFiles.RemoveAll(p => String.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            _recentFiles.Insert(0, path);
+            if (_recentFiles.Count > 12) _recentFiles.RemoveRange(12, _recentFiles.Count - 12);
+            try { File.WriteAllLines(RecentFilesStorePath, _recentFiles); } catch { }
+            RefreshRecentFilesMenu();
+        }
+
+        // Обновява менюто и показва пълния път при задържане на курсора.
+        private void RefreshRecentFilesMenu()
+        {
+            if (_recentFilesMenu == null) return;
+            _recentFilesMenu.DropDownItems.Clear();
+            if (_recentFiles.Count == 0)
+            {
+                _recentFilesMenu.DropDownItems.Add("(няма последни файлове)").Enabled = false;
+            }
+            else
+            {
+                foreach (string path in _recentFiles.ToArray())
+                {
+                    var item = new ToolStripMenuItem(Path.GetFileName(path));
+                    item.ToolTipText = path;
+                    item.Click += (s, e) =>
+                    {
+                        if (File.Exists(path)) LoadFile(path);
+                        else
+                        {
+                            _recentFiles.Remove(path);
+                            RefreshRecentFilesMenu();
+                            try { File.WriteAllLines(RecentFilesStorePath, _recentFiles); } catch { }
+                        }
+                    };
+                    _recentFilesMenu.DropDownItems.Add(item);
+                }
+                _recentFilesMenu.DropDownItems.Add(new ToolStripSeparator());
+                _recentFilesMenu.DropDownItems.Add("Изчисти списъка", null, (s,e) =>
+                {
+                    _recentFiles.Clear();
+                    RefreshRecentFilesMenu();
+                    try { File.WriteAllText(RecentFilesStorePath, ""); } catch { }
+                });
+            }
+        }
+
         private void NewSketch()
         {
             // Всеки нов скеч отваря отделен таб, без да замества вече отворените файлове.
@@ -551,6 +632,7 @@ namespace ArduinoStudio7
                 }
                 string content = File.ReadAllText(fullPath);
                 AddDocumentTab(fullPath, content, Path.GetFileName(fullPath));
+                AddRecentFile(fullPath);
                 _projectFolder = Path.GetDirectoryName(fullPath);
                 RefreshProjectTree();
                 Log("Отворен файл в нов таб: " + fullPath);
@@ -798,6 +880,7 @@ namespace ArduinoStudio7
                     page.Tag = path;
                     File.WriteAllText(path, _tabEditors[page].Text);
                     _savedTexts[page] = _tabEditors[page].Text;
+                    AddRecentFile(path);
                     _currentFile = path;
                     _projectFolder = Path.GetDirectoryName(path);
                     UpdateTabTitle(page);
