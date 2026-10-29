@@ -84,6 +84,8 @@ namespace ArduinoStudio7
             toolsMenu.DropDownItems.Add("Настройки на Arduino CLI...", null, (s, e) => ChooseCli());
             toolsMenu.DropDownItems.Add("Подготви компилатора (AVR)", null, (s, e) => InstallAvrCore());
             toolsMenu.DropDownItems.Add("Инсталирай библиотеката LiquidCrystal", null, (s, e) => InstallLiquidCrystal());
+            toolsMenu.DropDownItems.Add("Инсталирай библиотека по име...", null, (s, e) => InstallLibraryByName());
+            toolsMenu.DropDownItems.Add("Отвори папката с Arduino библиотеки", null, (s, e) => OpenArduinoLibrariesFolder());
             toolsMenu.DropDownItems.Add("Справка за платките...", null, (s, e) => ShowBoardHelp());
             // Меню за редактиране, търсене и навигация в кода.
             var editMenu = new ToolStripMenuItem("Редактиране");
@@ -1359,6 +1361,66 @@ namespace ArduinoStudio7
             if (String.IsNullOrWhiteSpace(_port.Text)) { Log("Изберете COM порт преди качване."); return; }
             string sketchFolder = Path.GetDirectoryName(_currentFile);
             RunCli("upload --fqbn " + Quote(_board.Text.Trim()) + " --port " + Quote(_port.Text) + " " + Quote(sketchFolder), sketchFolder);
+        }
+
+        // Инсталира библиотека по име чрез Arduino CLI, без да изисква ръчно копиране на файлове.
+        private void InstallLibraryByName()
+        {
+            string name = AskText("Инсталиране на библиотека", "Име на библиотеката от Arduino Library Manager:", "");
+            if (String.IsNullOrWhiteSpace(name)) return;
+            name = name.Trim();
+            if (name.IndexOfAny(new[] { '\\r', '\\n', ';', '&', '|', '>' , '<' }) >= 0)
+            {
+                MessageBox.Show(this, "Името съдържа недопустими символи.", "Библиотека", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (MessageBox.Show(this, "Ще се опита инсталиране на библиотека „" + name +
+                "“ чрез Arduino CLI. Необходима е интернет връзка. Да продължа ли?",
+                "Инсталиране на библиотека", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            var worker = new System.ComponentModel.BackgroundWorker();
+            worker.DoWork += (sender, args) =>
+            {
+                try
+                {
+                    string folder = AppDomain.CurrentDomain.BaseDirectory;
+                    Action<string> report = line => BeginInvoke((Action)(() => Log(line)));
+                    report("Обновяване на индекса на библиотеките...");
+                    string result = _toolchain.Run("lib update-index", folder, report);
+                    if (result != "0")
+                    {
+                        args.Result = "Индексът не се обнови. Проверете интернет връзката и изхода.";
+                        return;
+                    }
+                    report("Инсталиране на библиотека: " + name);
+                    result = _toolchain.Run("lib install " + Quote(name), folder, report);
+                    args.Result = result == "0"
+                        ? "Командата за инсталиране приключи успешно: " + name
+                        : "Инсталирането не успя. Проверете името и съобщенията в Output.";
+                }
+                catch (Exception ex) { args.Result = "Грешка при инсталиране: " + ex.Message; }
+            };
+            worker.RunWorkerCompleted += (sender, args) =>
+                MessageBox.Show(this, Convert.ToString(args.Result), "Arduino библиотека",
+                    MessageBoxButtons.OK, args.Error == null ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+            worker.RunWorkerAsync();
+        }
+
+        // Отваря стандартната папка за библиотеки на Arduino IDE/CLI в Windows.
+        private void OpenArduinoLibrariesFolder()
+        {
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Arduino", "libraries");
+            try
+            {
+                Directory.CreateDirectory(folder);
+                System.Diagnostics.Process.Start("explorer.exe", Quote(folder));
+                Log("Папка с Arduino библиотеки: " + folder);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Не може да се отвори папката: " + ex.Message,
+                    "Arduino библиотеки", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void RunCli(string arguments, string workingDirectory)
