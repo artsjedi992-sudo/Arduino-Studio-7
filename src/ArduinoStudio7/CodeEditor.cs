@@ -65,6 +65,7 @@ namespace ArduinoStudio7
             // Отлагаме оцветяването, за да остане въвеждането плавно.
             _highlightTimer.Interval = 700; // Не оцветяваме при всяко кратко спиране на курсора — пазим плавното писане и скролиране.
             _highlightTimer.Tick += delegate { _highlightTimer.Stop(); HighlightSyntax(); };
+            _viewportHighlightTimer.Tick += delegate { _viewportHighlightTimer.Stop(); HighlightSyntax(); };
             TextChanged += delegate { _highlightTimer.Stop(); _highlightTimer.Start(); };
             MouseMove += EditorMouseMove;
             MouseLeave += delegate { _hintTimer.Stop(); HideHint(); };
@@ -122,7 +123,7 @@ namespace ArduinoStudio7
             editorMenu.Items.Add("Намали шрифта", null, (s, e) => ChangeEditorFontSize(-1));
             editorMenu.Items.Add("Нормален размер на шрифта", null, (s, e) => ResetEditorFontSize());
             ContextMenuStrip = editorMenu;
-            Disposed += delegate { _hint.Dispose(); _hintTimer.Dispose(); _highlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
+            Disposed += delegate { _hint.Dispose(); _hintTimer.Dispose(); _highlightTimer.Dispose(); _viewportHighlightTimer.Dispose(); _completionMenu.Dispose(); editorMenu.Dispose(); };
         }
 
         // Цветове на контекстното меню — светлосиньо маркиране като във Visual Studio 2019.
@@ -152,87 +153,106 @@ namespace ArduinoStudio7
             else _highlightTimer.Start(); // Ако още няма прозоречна дръжка, оставяме таймера да го направи по-късно.
         }
 
-        // RichTextBox забавя скролирането, когато целият голям файл се форматира на хиляди отделни диапазони.
-        // При големи скечове пропускаме синтактичното оцветяване, за да останат писането и скролът плавни.
-        // По-малки файлове запазват съществуващото оцветяване.
-        private const int MaxCharsForRichTextHighlighting = 20000;
+        // Оцветяваме само видимата част от документа, а не хиляди диапазони във целия файл.
+        // Това избягва блокиране при скролиране с колелцето на мишката.
+        private readonly Timer _viewportHighlightTimer = new Timer();
+
+        private void ScheduleViewportHighlight()
+        {
+            // Отлагаме оцветяването до кратка пауза в скролирането.
+            _viewportHighlightTimer.Stop();
+            _viewportHighlightTimer.Interval = 180;
+            _viewportHighlightTimer.Start();
+        }
+
+        // Засичаме скрол с колелцето, лентата за превъртане и клавиатурата.
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == 0x020A || m.Msg == 0x0115 || m.Msg == 0x0114)
+                ScheduleViewportHighlight();
+        }
 
         private void HighlightSyntax()
         {
-            // Проверяваме размера преди всякакви Select/SelectionColor операции.
-            // Това е важно: при голям файл не създаваме хиляди RichTextBox форматни диапазони.
-            if (TextLength == 0 || !IsHandleCreated) return;
-            if (TextLength > MaxCharsForRichTextHighlighting)
-            {
-                // При голям файл не преформатираме текста изобщо: това избягва блокиране на UI нишката.
-                // ForeColor вече е зададен на тъмносиво в конструктора; запазваме позицията на каретката.
-                return;
-            }
+            if (TextLength == 0 || !IsHandleCreated || ClientSize.Height <= 0) return;
+
+            // Взимаме приблизително видимите редове плюс по един резервен ред отгоре и отдолу.
+            int topLine = GetLineFromCharIndex(GetCharIndexFromPosition(new Point(1, 1)));
+            int bottomLine = GetLineFromCharIndex(GetCharIndexFromPosition(new Point(1, Math.Max(1, ClientSize.Height - 2))));
+            int firstLine = Math.Max(0, topLine - 1);
+            int lastLine = Math.Min(Lines.Length - 1, bottomLine + 2);
+            if (firstLine < 0 || lastLine < firstLine) return;
+
+            int start = GetFirstCharIndexFromLine(firstLine);
+            int afterLast = lastLine + 1 < Lines.Length ? GetFirstCharIndexFromLine(lastLine + 1) : TextLength;
+            if (start < 0 || afterLast < start) return;
+
             int caret = SelectionStart;
             int selectionLength = SelectionLength;
+            string source = Text.Substring(start, afterLast - start);
             NativePoint scrollPosition = new NativePoint();
             SendMessage(Handle, EM_GETSCROLLPOS, IntPtr.Zero, ref scrollPosition);
             SendMessage(Handle, WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
             try
             {
-                // Базовият цвят е тъмносив, подобно на светлата тема на Visual Studio.
-                SelectAll();
+                // Нулираме цвета само за видимия диапазон — SelectAll() вече не се използва.
+                Select(start, afterLast - start);
                 SelectionColor = Color.FromArgb(30, 30, 30);
 
-                // Препроцесорни директиви: #include, #define, #if и други.
-                string source = Text; // Единствено копие на текста за цялото оцветяване — избягваме повтарящи се копирания.
-                ApplyColor(source, @"(?m)^\s*#\s*\w+.*$", Color.FromArgb(175, 90, 190));
+                // Препроцесорни директиви.
+                ApplyColor(source, start, @"(?m)^\\s*#\\s*\\w+.*$", Color.FromArgb(175, 90, 190));
                 // Текстови константи и числа.
-                ApplyColor(source, @"(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*')", Color.FromArgb(163, 21, 21));
-                ApplyColor(source, @"\b\d+(?:\.\d+)?\b", Color.FromArgb(9, 134, 88));
+                ApplyColor(source, start, @"(?:""(?:\\\\.|[^""\\\\])*""|'(?:\\\\.|[^'\\\\])*')", Color.FromArgb(163, 21, 21));
+                ApplyColor(source, start, @"\\b\\d+(?:\\.\\d+)?\\b", Color.FromArgb(9, 134, 88));
 
-                // Един проход през идентификаторите; проверяваме следващия знак директно вместо да търсим наново остатъка от файла.
-                foreach (Match match in Regex.Matches(source, @"\b[A-Za-z_][A-Za-z0-9_]*\b"))
+                // Оцветяваме ключови думи, типове и имена на функции само в този видим диапазон.
+                foreach (Match match in Regex.Matches(source, @"\\b[A-Za-z_][A-Za-z0-9_]*\\b"))
                 {
                     string word = match.Value;
                     Color? tokenColor = null;
                     if (_keywords.Contains(word))
-                        tokenColor = Color.FromArgb(0, 0, 220); // Ключови думи и Arduino константи.
-                    else if (Regex.IsMatch(word, @"^(?:uint\d+_t|int\d+_t|size_t|String|HardwareSerial)$"))
-                        tokenColor = Color.FromArgb(43, 145, 175); // Често използвани типове.
+                        tokenColor = Color.FromArgb(0, 0, 220);
+                    else if (Regex.IsMatch(word, @"^(?:uint\\d+_t|int\\d+_t|size_t|String|HardwareSerial)$"))
+                        tokenColor = Color.FromArgb(43, 145, 175);
                     else
                     {
                         int next = match.Index + match.Length;
                         while (next < source.Length && Char.IsWhiteSpace(source[next])) next++;
                         if (next < source.Length && source[next] == '(')
-                            tokenColor = Color.FromArgb(121, 94, 38); // Имена на функции.
+                            tokenColor = Color.FromArgb(121, 94, 38);
                     }
 
                     if (tokenColor.HasValue)
                     {
-                        Select(match.Index, match.Length);
+                        Select(start + match.Index, match.Length);
                         SelectionColor = tokenColor.Value;
                     }
                 }
-                // Коментарите се оцветяват последни, за да запазят зеления цвят навсякъде.
-                ApplyColor(source, @"//[^\r\n]*|/\*[\s\S]*?\*/", Color.FromArgb(0, 128, 0));
 
-                // Връщаме избора и позицията на курсора.
+                // Коментарите са последни, за да останат зелени независимо от останалите правила.
+                ApplyColor(source, start, @"//[^\\r\\n]*|/\\*[\\s\\S]*?\\*/", Color.FromArgb(0, 128, 0));
+
+                // Връщаме маркирането и каретката, без да променяме позицията на скрола.
                 Select(Math.Min(caret, TextLength), Math.Min(selectionLength, Math.Max(0, TextLength - caret)));
             }
             finally
             {
-                // Възстановяваме скрола чрез Win32 позиция, без да го местим към каретката.
                 SendMessage(Handle, EM_SETSCROLLPOS, IntPtr.Zero, ref scrollPosition);
                 SendMessage(Handle, WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
                 Invalidate();
             }
         }
 
-        private void ApplyColor(string source, string pattern, Color color)
+        // Прилага цветове към съвпаденията, като превръща локалния индекс във абсолютен.
+        private void ApplyColor(string source, int baseIndex, string pattern, Color color)
         {
             foreach (Match match in Regex.Matches(source, pattern))
             {
-                Select(match.Index, match.Length);
+                Select(baseIndex + match.Index, match.Length);
                 SelectionColor = color;
             }
         }
-
 
         private void EditorKeyDown(object sender, KeyEventArgs e)
         {
