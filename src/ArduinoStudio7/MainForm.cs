@@ -34,6 +34,8 @@ namespace ArduinoStudio7
             Width = 1200; Height = 780;
             MinimumSize = new Size(850, 550);
             StartPosition = FormStartPosition.CenterScreen;
+            KeyPreview = true;
+            KeyDown += MainFormKeyDown;
             // Стартираме максимизиран, за да има достатъчно място за редактора и кода.
             WindowState = FormWindowState.Maximized;
             BackColor = Color.FromArgb(238, 242, 250); // Светъл синьо-сив фон като Visual Studio 2019.
@@ -52,8 +54,12 @@ namespace ArduinoStudio7
             var fileMenu = new ToolStripMenuItem("Файл");
             fileMenu.DropDownItems.Add("Нов скеч", null, (s, e) => NewSketch());
             fileMenu.DropDownItems.Add("Отвори...", null, (s, e) => OpenFile());
-            fileMenu.DropDownItems.Add("Запиши", null, (s, e) => SaveFile());
+            fileMenu.DropDownItems.Add("Запиши  Ctrl+S", null, (s, e) => SaveFile());
+            fileMenu.DropDownItems.Add("Запиши всички", null, (s, e) => SaveAllDocuments());
             fileMenu.DropDownItems.Add("Запиши като...", null, (s, e) => SaveFileAs());
+            fileMenu.DropDownItems.Add(new ToolStripSeparator());
+            fileMenu.DropDownItems.Add("Затвори текущия таб  Ctrl+W", null, (s, e) => CloseDocument(_documents.SelectedTab, false));
+            fileMenu.DropDownItems.Add("Затвори без запис", null, (s, e) => CloseDocument(_documents.SelectedTab, true));
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add("Отвори папка проект...", null, (s, e) => OpenProjectFolder());
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
@@ -535,6 +541,21 @@ namespace ArduinoStudio7
         }
 
         // Създаваме допълнителен файл в папката на проекта.
+        // Глобални клавишни комбинации за бърза работа с документите.
+        private void MainFormKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.S) { SaveFile(); e.SuppressKeyPress = true; }
+            else if (e.Control && e.KeyCode == Keys.W) { CloseDocument(_documents.SelectedTab, false); e.SuppressKeyPress = true; }
+            else if (e.Control && e.Shift && e.KeyCode == Keys.S) { SaveAllDocuments(); e.SuppressKeyPress = true; }
+        }
+
+        // Записва всички отворени документи; файловете без име ще поискат място за запис.
+        private void SaveAllDocuments()
+        {
+            foreach (TabPage page in _documents.TabPages.Cast<TabPage>().ToArray())
+                SaveDocument(page);
+        }
+
         // Създава таб с отделен редактор и номерация на редовете в лявата лента.
         private void AddDocumentTab(string path, string content, string title)
         {
