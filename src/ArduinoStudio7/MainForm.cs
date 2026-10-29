@@ -649,13 +649,40 @@ namespace ArduinoStudio7
         // При двойно щракване върху съобщение с номер на ред опитваме да отворим съответния ред.
         private void NavigateFromBuildOutput()
         {
-            Match m = Regex.Match(_output.SelectedText.Length > 0 ? _output.SelectedText : _output.Text,
-                @"(?:\\(|:)(\\d+)(?:,\\d+)?\\)?");
-            if (!m.Success || _editor == null) return;
-            int line;
-            if (!Int32.TryParse(m.Groups[1].Value, out line) || line < 1 || line > _editor.Lines.Length) return;
-            int pos = _editor.GetFirstCharIndexFromLine(line - 1);
-            if (pos >= 0) { _editor.Select(pos, 0); _editor.Focus(); _editor.ScrollToCaret(); }
+            // Първо използваме избрания ред от изхода, иначе целия лог.
+            string source = _output.SelectionLength > 0 ? _output.SelectedText : _output.Text;
+            Match match = Regex.Match(source,
+                @"(?<file>(?:[A-Za-z]:\\|/)?[^:\r\n]+?\.(?:ino|cpp|h|c|hpp)):(?<line>\d+)(?::(?<column>\d+))?",
+                RegexOptions.IgnoreCase);
+            string file = null;
+            int line = 0, column = 1;
+            if (match.Success)
+            {
+                file = match.Groups["file"].Value.Trim();
+                Int32.TryParse(match.Groups["line"].Value, out line);
+                if (match.Groups["column"].Success) Int32.TryParse(match.Groups["column"].Value, out column);
+                if (!Path.IsPathRooted(file) && !String.IsNullOrEmpty(_projectFolder))
+                    file = Path.GetFullPath(Path.Combine(_projectFolder, file));
+                if (!File.Exists(file))
+                {
+                    string candidate = Path.Combine(_projectFolder ?? "", Path.GetFileName(file));
+                    if (File.Exists(candidate)) file = candidate;
+                }
+                if (File.Exists(file)) LoadFile(file);
+            }
+            else
+            {
+                // Резервен вариант за кратки съобщения, които съдържат само номер на ред.
+                Match number = Regex.Match(source, @"(?:\(|:)(\d+)(?:,\d+)?\)?");
+                if (!number.Success || !Int32.TryParse(number.Groups[1].Value, out line)) return;
+            }
+            if (_editor == null || line < 1 || line > _editor.Lines.Length) return;
+            int position = _editor.GetFirstCharIndexFromLine(line - 1);
+            if (position >= 0)
+            {
+                position = Math.Min(_editor.TextLength, position + Math.Max(0, column - 1));
+                _editor.Select(position, 0); _editor.Focus(); _editor.ScrollToCaret();
+            }
         }
 
         private void SaveDocument(TabPage page)
