@@ -36,10 +36,9 @@ jobs:
           Expand-Archive -Path "$env:RUNNER_TEMP/arduino-cli.zip" -DestinationPath "$env:RUNNER_TEMP/arduino-cli" -Force
           Copy-Item "$env:RUNNER_TEMP/arduino-cli/arduino-cli.exe" "artifacts/tools/arduino-cli.exe"
 
-          Compress-Archive -Path artifacts/* -DestinationPath Arduino-Studio-7-Windows.zip -Force
       - name: Качване на артефакта
         uses: actions/upload-artifact@v4
         with:
           name: Arduino-Studio-7-Windows
-          path: Arduino-Studio-7-Windows.zip
+          path: artifacts/
           if-no-files-found: error
