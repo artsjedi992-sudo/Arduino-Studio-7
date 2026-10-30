@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq; // LINQ: използва се за филтриране и проверка на редовете при коментиране.
 using System.Drawing;
 using System.Text.RegularExpressions;
+using System.Runtime.InteropServices; // Изпращане на нативна команда към Scintilla.
 using System.Windows.Forms;
 using ScintillaNET;
 
@@ -11,6 +12,13 @@ namespace ArduinoStudio7
     // Редактор в светлата цветова схема на Visual Studio 2019, с оцветяване и подсказки.
     public sealed class CodeEditor : Scintilla
     {
+        // SCI_COLOURISE принуждава нативния C/C++ лексер да обработи зададения диапазон.
+        private const uint SciColouriseMessage = 4003;
+
+        // Scintilla приема командата чрез стандартния Windows механизъм SendMessage.
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendNativeMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
         private readonly ToolTip _hint = new ToolTip();
         // Подсказките се обработват само след като мишката остане неподвижна 2 секунди.
         private readonly Timer _hintTimer = new Timer();
@@ -170,7 +178,7 @@ namespace ArduinoStudio7
             // Това е важно, когато текстът е зададен преди Scintilla да е създала
             // своя прозорец и автоматичното първоначално оцветяване е пропуснато.
             if (!IsDisposed && IsHandleCreated && TextLength > 0)
-                Colourise(0, -1);
+                SendNativeMessage(Handle, SciColouriseMessage, IntPtr.Zero, new IntPtr(-1));
         }
 
         // Съвместимост със стария интерфейс на командите и главния прозорец.
