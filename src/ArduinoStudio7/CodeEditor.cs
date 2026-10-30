@@ -53,7 +53,7 @@ namespace ArduinoStudio7
             Styles[Style.Cpp.Character].ForeColor = Color.FromArgb(163, 21, 21);
             Styles[Style.Cpp.Word].ForeColor = Color.FromArgb(0, 0, 220);
             Styles[Style.Cpp.Word2].ForeColor = Color.FromArgb(43, 145, 175);
-            Styles[Style.Cpp.Function].ForeColor = Color.FromArgb(121, 94, 38);
+            Styles[Style.Cpp.GlobalClass].ForeColor = Color.FromArgb(121, 94, 38); // ScintillaNET 3.6.3 няма отделен стил Function; GlobalClass е наличният стил за имена на класове.
             Styles[Style.Cpp.Operator].ForeColor = Color.FromArgb(30, 30, 30);
             Styles[Style.Cpp.Identifier].ForeColor = Color.FromArgb(30, 30, 30);
             Styles[Style.Cpp.Preprocessor].ForeColor = Color.FromArgb(175, 90, 190);
