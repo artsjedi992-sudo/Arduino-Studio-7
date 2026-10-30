@@ -16,7 +16,7 @@ namespace ArduinoStudio7
         private const uint SciColouriseMessage = 4003;
 
         // Scintilla приема командата чрез стандартния Windows механизъм SendMessage.
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern IntPtr SendNativeMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
         private readonly ToolTip _hint = new ToolTip();
