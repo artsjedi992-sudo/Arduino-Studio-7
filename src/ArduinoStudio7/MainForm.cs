@@ -975,6 +975,8 @@ namespace ArduinoStudio7
             _savedTexts[page] = editor.Text;
             editor.FindRequested += (s, e) => FindInEditor();
             editor.BookmarksChanged += (s, e) => gutter.Invalidate();
+            // Scintilla изпраща UpdateUI и при вертикално скролиране — обновяваме номерата.
+            editor.UpdateUI += (s, e) => gutter.Invalidate();
             editor.TextChanged += (s, e) => { UpdateTabTitle(page); if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
             editor.SelectionChanged += (s, e) => { if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
             editor.Resize += (s, e) => gutter.Invalidate();
@@ -1081,7 +1083,12 @@ namespace ArduinoStudio7
                 using (var brush = new SolidBrush(Color.FromArgb(105, 115, 135)))
                 using (var font = new Font("Consolas", 9.0f))
                 {
-                    for (int line = 0; line < _code.Lines.Length; line++)
+                    // Рисуваме само видимите редове. Обхождането на целия файл
+                    // при всяко OnPaint забавя скролиране на големи Arduino скечове.
+                    int firstVisibleLine = Math.Max(0, _code.FirstVisibleLine);
+                    int lastVisibleLine = Math.Min(_code.Lines.Length - 1,
+                        firstVisibleLine + _code.LinesOnScreen + 1);
+                    for (int line = firstVisibleLine; line <= lastVisibleLine; line++)
                     {
                         int first = _code.GetFirstCharIndexFromLine(line);
                         if (first < 0) continue;
