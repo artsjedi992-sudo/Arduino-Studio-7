@@ -258,6 +258,14 @@ namespace ArduinoStudio7
 
         private void EditorKeyDown(object sender, KeyEventArgs e)
         {
+            // F12 преминава към декларацията/дефиницията на името под каретката.
+            if (e.KeyCode == Keys.F12 && !e.Control && !e.Alt && !e.Shift)
+            {
+                e.SuppressKeyPress = true;
+                NavigateFromCaret();
+                return;
+            }
+
             // Enter наследява отместването на предходния ред.
             if (e.KeyCode == Keys.Enter && !e.Control && !e.Alt)
             {
@@ -545,26 +553,41 @@ namespace ArduinoStudio7
         // Навигира към дефиниция на функция или към първа декларация на идентификатора.
         private bool NavigateToDefinition(string word)
         {
-            if (String.IsNullOrEmpty(word)) return false;
+            if (String.IsNullOrWhiteSpace(word)) return false;
             string escaped = Regex.Escape(word);
-            Match definition = Regex.Match(Text,
-                @"(?m)^[ \t]*(?:(?:static|inline|virtual|constexpr|extern)\s+)*(?:[\w:~*&<>]+[ \t]+)+" +
-                escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?(?:\{|\r?\n[ \t]*\{)");
-            if (!definition.Success)
+
+            // Първо търсим реалното тяло на функцията в текущия документ.
+            Match target = Regex.Match(Text,
+                @"(?m)^[ \t]*(?:(?:static|inline|virtual|constexpr|extern|IRAM_ATTR)\s+)*(?:[\w:~*&<>]+[ \t]+)+" +
+                escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?(?:\{|\r?\n[ \t]*\{)",
+                RegexOptions.CultureInvariant);
+
+            // Ако тялото липсва, търсим декларация/прототип, а не произволно срещане в кода.
+            if (!target.Success)
+                target = Regex.Match(Text,
+                    @"(?m)^[ \t]*(?:(?:extern|static|const|volatile)\s+)*(?:[\w:~*&<>]+[ \t]+)+" +
+                    escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?;",
+                    RegexOptions.CultureInvariant);
+
+            // За променливи и макроси търсим ред, който започва с декларацията.
+            if (!target.Success)
+                target = Regex.Match(Text,
+                    @"(?m)^[ \t]*(?:#\s*define[ \t]+)?" + escaped + @"\b",
+                    RegexOptions.CultureInvariant);
+
+            if (target.Success)
             {
-                // Резервен вариант за променливи, макроси и декларации.
-                definition = Regex.Match(Text, @"(?m)^[ \t]*(?:#\s*define\s+)?" + escaped + @"\b");
+                Select(target.Index, 0);
+                ScrollToCaret();
+                Focus();
+                return true;
             }
-            if (!definition.Success)
-            {
-                // Ако символът не е в текущия файл, търсим го в останалите файлове на проекта.
-                if (ExternalNavigate != null && ExternalNavigate(word)) return true;
-                return false;
-            }
-            Select(definition.Index, 0);
-            ScrollToCaret();
-            Focus();
-            return true;
+
+            // Търсим и в останалите файлове, включително незаписаните отворени табове.
+            if (ExternalNavigate != null && ExternalNavigate(word))
+                return true;
+
+            return false;
         }
 
         // Използва се от контекстното меню „Към дефиницията“.
@@ -633,12 +656,24 @@ namespace ArduinoStudio7
 
         private string GetWordAt(int index)
         {
-            // Намираме границите на C/C++ идентификатора около курсора.
-            int start = Math.Min(index, TextLength - 1);
-            int end = start;
+            // CharPositionFromPoint понякога връща позицията след символа под мишката.
+            // При такава позиция се връщаме един знак назад, ако там завършва идентификатор.
+            if (TextLength == 0) return String.Empty;
+            int position = Math.Max(0, Math.Min(index, TextLength));
+            if (position == TextLength || !IsIdentifierChar(Text[position]))
+            {
+                if (position > 0 && IsIdentifierChar(Text[position - 1]))
+                    position--;
+                else
+                    return String.Empty;
+            }
+
+            // Разширяваме позицията до целия C/C++ идентификатор.
+            int start = position;
+            int end = position + 1;
             while (start > 0 && IsIdentifierChar(Text[start - 1])) start--;
             while (end < TextLength && IsIdentifierChar(Text[end])) end++;
-            return end > start ? Text.Substring(start, end - start) : "";
+            return Text.Substring(start, end - start);
         }
 
         private bool IsIdentifierChar(char c)
