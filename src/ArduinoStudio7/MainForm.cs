@@ -30,6 +30,9 @@ namespace ArduinoStudio7
         private readonly ArduinoToolchain _toolchain = new ArduinoToolchain();
         private string _currentFile = "";
         private string _projectFolder = "";
+        // Кешират се прочетените файлове, за да не се сканира диска при всяка подсказка.
+        private List<KeyValuePair<string, string>> _projectSourceCache;
+        private string _projectSourceCacheRoot = "";
         private readonly SerialPort _serial = new SerialPort();
 
         public MainForm()
@@ -685,6 +688,7 @@ namespace ArduinoStudio7
                 AddDocumentTab(fullPath, content, Path.GetFileName(fullPath));
                 AddRecentFile(fullPath);
                 _projectFolder = Path.GetDirectoryName(fullPath);
+                InvalidateProjectSourceCache();
                 RefreshProjectTree();
                 Log("Отворен файл в нов таб: " + fullPath);
             }
@@ -959,51 +963,67 @@ namespace ArduinoStudio7
         }
 
         // Връща отворените документи и файловете от текущата папка на проекта.
-        // Използваме и текста от табовете, за да се виждат незаписаните промени.
+        // Резултатът се кешира; промяна в отворен документ изчиства кеша.
         private IEnumerable<KeyValuePair<string, string>> GetProjectSourceDocuments()
         {
+            string root = String.IsNullOrEmpty(_projectFolder) ? "" : Path.GetFullPath(_projectFolder);
+            if (_projectSourceCache != null &&
+                String.Equals(root, _projectSourceCacheRoot, StringComparison.OrdinalIgnoreCase))
+                return _projectSourceCache;
+
+            var documents = new List<KeyValuePair<string, string>>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // Първо добавяме отворените табове, включително незаписаните редакции.
             foreach (var pair in _tabEditors)
             {
                 string openPath = pair.Key.Tag as string;
-                if (!String.IsNullOrEmpty(openPath))
-                    seen.Add(Path.GetFullPath(openPath));
-                yield return new KeyValuePair<string, string>(openPath ?? pair.Key.Text, pair.Value.Text);
+                string key = String.IsNullOrEmpty(openPath) ? pair.Key.Text : Path.GetFullPath(openPath);
+                if (!String.IsNullOrEmpty(openPath)) seen.Add(key);
+                documents.Add(new KeyValuePair<string, string>(key, pair.Value.Text));
             }
 
-            if (String.IsNullOrEmpty(_projectFolder) || !Directory.Exists(_projectFolder))
-                yield break;
-
-            string[] extensions = { ".ino", ".pde", ".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".cxx" };
-            string[] files;
-            try
+            // Ако няма папка на проект, индексът съдържа само отворените документи.
+            if (!String.IsNullOrEmpty(root) && Directory.Exists(root))
             {
-                // Ограничаваме броя, за да не блокираме редактора при огромни папки.
-                files = Directory.GetFiles(_projectFolder, "*.*", SearchOption.AllDirectories)
-                    .Where(path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-                    .Take(500).ToArray();
-            }
-            catch { yield break; }
-
-            foreach (string path in files)
-            {
-                string fullPath;
-                try { fullPath = Path.GetFullPath(path); }
-                catch { continue; }
-                if (!seen.Add(fullPath)) continue;
-
-                string source;
+                string[] extensions = { ".ino", ".pde", ".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".cxx" };
+                string[] files;
                 try
                 {
-                    var info = new FileInfo(fullPath);
-                    if (info.Length > 1024 * 1024) continue; // Пропускаме файлове над 1 MB.
-                    source = File.ReadAllText(fullPath);
+                    // Ограничаваме броя на файловете и не влизаме повторно в сканиране при hover.
+                    files = Directory.GetFiles(root, "*.*", SearchOption.AllDirectories)
+                        .Where(path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                        .Take(500).ToArray();
                 }
-                catch { continue; }
+                catch { files = new string[0]; }
 
-                yield return new KeyValuePair<string, string>(fullPath, source);
+                foreach (string path in files)
+                {
+                    string fullPath;
+                    try { fullPath = Path.GetFullPath(path); }
+                    catch { continue; }
+                    if (!seen.Add(fullPath)) continue;
+
+                    try
+                    {
+                        var info = new FileInfo(fullPath);
+                        if (info.Length > 1024 * 1024) continue; // Пропускаме файлове над 1 MB.
+                        documents.Add(new KeyValuePair<string, string>(fullPath, File.ReadAllText(fullPath)));
+                    }
+                    catch { /* Недостъпният файл не прекъсва индексирането на останалите. */ }
+                }
             }
+
+            _projectSourceCacheRoot = root;
+            _projectSourceCache = documents;
+            return _projectSourceCache;
+        }
+
+        // Изчиства индекса след промяна на текст, запис или смяна на проекта.
+        private void InvalidateProjectSourceCache()
+        {
+            _projectSourceCache = null;
+            _projectSourceCacheRoot = "";
         }
 
         // Намира дефиниция на функция в друг .ino/.cpp/.h файл и отваря точния ред.
@@ -1095,7 +1115,7 @@ namespace ArduinoStudio7
             editor.BookmarksChanged += (s, e) => gutter.Invalidate();
             // Scintilla изпраща UpdateUI и при вертикално скролиране — обновяваме номерата.
             editor.UpdateUI += (s, e) => gutter.Invalidate();
-            editor.TextChanged += (s, e) => { UpdateTabTitle(page); if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
+            editor.TextChanged += (s, e) => { InvalidateProjectSourceCache(); UpdateTabTitle(page); if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
             editor.SelectionChanged += (s, e) => { if (editor == _editor && _updateEditorStatus != null) _updateEditorStatus(); gutter.Invalidate(); };
             editor.Resize += (s, e) => gutter.Invalidate();
             editor.MouseWheel += (s, e) => gutter.Invalidate();
@@ -1120,6 +1140,7 @@ namespace ArduinoStudio7
                 _editor = editor;
                 _currentFile = page.Tag as string ?? String.Empty;
                 _projectFolder = String.IsNullOrEmpty(_currentFile) ? "" : Path.GetDirectoryName(_currentFile);
+                InvalidateProjectSourceCache();
                 Text = "Arduino Studio 7 — " + (String.IsNullOrEmpty(_currentFile) ? page.Text.TrimEnd('*') : Path.GetFileName(_currentFile));
                 if (_updateEditorStatus != null) _updateEditorStatus();
             }
