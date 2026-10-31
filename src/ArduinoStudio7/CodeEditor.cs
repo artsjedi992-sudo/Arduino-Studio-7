@@ -23,6 +23,8 @@ namespace ArduinoStudio7
         public Func<string, bool> ExternalNavigate { get; set; }
         // Главният прозорец намира декларации и типове извън текущия документ.
         public Func<string, string> ExternalHint { get; set; }
+        // Главният прозорец връща символите от целия проект за автоматично допълване.
+        public Func<string, IEnumerable<string>> ExternalCompletions { get; set; }
 
         private readonly ToolTip _hint = new ToolTip();
         // Подсказките се обработват само след като мишката остане неподвижна 2 секунди.
@@ -480,6 +482,20 @@ namespace ArduinoStudio7
                 { "String", "String" }, { "unsigned long", "unsigned long" }, { "const", "const" },
                 { "volatile", "volatile" }, { "return", "return" }, { "PROGMEM", "PROGMEM" }
             };
+
+            // Добавяме функции и глобални символи, намерени в останалите файлове на проекта.
+            if (ExternalCompletions != null)
+            {
+                try
+                {
+                    foreach (string projectSymbol in ExternalCompletions(""))
+                    {
+                        if (!String.IsNullOrWhiteSpace(projectSymbol) && !options.ContainsKey(projectSymbol))
+                            options[projectSymbol] = projectSymbol;
+                    }
+                }
+                catch { /* Грешка в индекса не трябва да блокира редактора. */ }
+            }
 
             // Определяме думата пред курсора и показваме първо съвпадащите допълнения.
             int caretIndex = SelectionStart;
