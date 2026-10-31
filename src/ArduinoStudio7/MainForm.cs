@@ -1088,11 +1088,37 @@ namespace ArduinoStudio7
             return null;
         }
 
-        // Свързва всеки редактор с общото търсене в проекта.
+        // Връща имената на функциите и променливите от индексираните файлове.
+        private IEnumerable<string> GetProjectCompletionSymbols(string prefix)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            // Разпознаваме имена на функции и типизирани декларации; не анализираме коментари като код.
+            var functionPattern = new Regex(@"(?m)^[ \\t]*(?:[\\w:~*&<>]+[ \\t]+)+" +
+                @"([A-Za-z_][A-Za-z0-9_]*)[ \\t]*\\([^;{}]*\\)[ \\t]*(?:const[ \\t]*)?(?:;|\\{|$)",
+                RegexOptions.CultureInvariant);
+            var variablePattern = new Regex(@"(?m)^[ \\t]*(?:(?:const|static|volatile|unsigned|signed)\\s+)*(?:[\\w:~*&<>]+\\s+)+" +
+                @"([A-Za-z_][A-Za-z0-9_]*)[ \\t]*(?:\\[[^\\]]*\\])?[ \\t]*(?:=[^;]*)?;",
+                RegexOptions.CultureInvariant);
+
+            foreach (var document in GetProjectSourceDocuments())
+            {
+                foreach (Match match in functionPattern.Matches(document.Value))
+                    if (match.Success) names.Add(match.Groups[1].Value);
+                foreach (Match match in variablePattern.Matches(document.Value))
+                    if (match.Success) names.Add(match.Groups[1].Value);
+            }
+
+            return names.Where(name => String.IsNullOrEmpty(prefix) ||
+                name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).Take(250).ToArray();
+        }
+
+        // Свързва всеки редактор с общото търсене и автоматичното допълване в проекта.
         private void ConnectProjectIntelligence(CodeEditor editor)
         {
             editor.ExternalNavigate = NavigateToProjectSymbol;
             editor.ExternalHint = GetProjectSymbolHint;
+            editor.ExternalCompletions = GetProjectCompletionSymbols;
         }
 
         // Създава таб с отделен редактор и номерация на редовете в лявата лента.
