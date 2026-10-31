@@ -1093,11 +1093,11 @@ namespace ArduinoStudio7
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
             // Разпознаваме имена на функции и типизирани декларации; не анализираме коментари като код.
-            var functionPattern = new Regex(@"(?m)^[ \\t]*(?:[\\w:~*&<>]+[ \\t]+)+" +
-                @"([A-Za-z_][A-Za-z0-9_]*)[ \\t]*\\([^;{}]*\\)[ \\t]*(?:const[ \\t]*)?(?:;|\\{|$)",
+            var functionPattern = new Regex(@"(?m)^[ \t]*(?:[\w:~*&<>]+[ \t]+)+" +
+                @"([A-Za-z_][A-Za-z0-9_]*)[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?(?:;|\{|$)",
                 RegexOptions.CultureInvariant);
-            var variablePattern = new Regex(@"(?m)^[ \\t]*(?:(?:const|static|volatile|unsigned|signed)\\s+)*(?:[\\w:~*&<>]+\\s+)+" +
-                @"([A-Za-z_][A-Za-z0-9_]*)[ \\t]*(?:\\[[^\\]]*\\])?[ \\t]*(?:=[^;]*)?;",
+            var variablePattern = new Regex(@"(?m)^[ \t]*(?:(?:const|static|volatile|unsigned|signed)\s+)*(?:[\w:~*&<>]+\s+)+" +
+                @"([A-Za-z_][A-Za-z0-9_]*)[ \t]*(?:\[[^\]]*\])?[ \t]*(?:=[^;]*)?;",
                 RegexOptions.CultureInvariant);
 
             foreach (var document in GetProjectSourceDocuments())
