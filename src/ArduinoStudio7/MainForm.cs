@@ -143,6 +143,8 @@ namespace ArduinoStudio7
                 MessageBox.Show(this, "Arduino Studio 7\\nСреда за редактиране, компилиране и качване на Arduino скечове.\\n\\nКомпилираните HEX файлове се записват в папката на скеча.", "За програмата", MessageBoxButtons.OK, MessageBoxIcon.Information));
 
             menu.Items.AddRange(new ToolStripItem[] { fileMenu, editMenu, projectMenu, buildMenu, toolsMenu, windowMenu, helpMenu });
+            // Добавяме малки цветни пиктограми към командите в главното меню.
+            DecorateMenuItems(menu.Items);
             MainMenuStrip = menu;
             KeyPreview = true;
             KeyDown += (s, e) =>
@@ -178,7 +180,22 @@ namespace ArduinoStudio7
             toolbar.Items.Add(Button("Обнови", (s,e) => RefreshPorts()));
 
             // Много-документен редактор: всеки файл получава собствен таб и собствено състояние.
-            _documents = new TabControl { Dock = DockStyle.Fill, Padding = new Point(12, 4), HotTrack = true };
+            _documents = new TabControl
+            {
+                Dock = DockStyle.Fill, Padding = new Point(12, 4), HotTrack = true,
+                DrawMode = TabDrawMode.OwnerDrawFixed, ItemSize = new Size(190, 28), SizeMode = TabSizeMode.Fixed
+            };
+            // Рисуваме заглавието и отделен бутон X във всеки таб.
+            _documents.DrawItem += DrawDocumentTab;
+            _documents.MouseDown += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Left) return;
+                int index = GetTabIndexAt(_documents, e.Location);
+                if (index < 0) return;
+                Rectangle tab = _documents.GetTabRect(index);
+                Rectangle close = new Rectangle(tab.Right - 25, tab.Top + 6, 17, 17);
+                if (close.Contains(e.Location)) CloseDocument(_documents.TabPages[index], false);
+            };
             _documents.SelectedIndexChanged += (s, e) => ActivateSelectedDocument();
             var tabMenu = new ContextMenuStrip();
             tabMenu.Items.Add("Запиши този файл", null, (s, e) => SaveDocument(GetContextTab(tabMenu)));
@@ -194,6 +211,7 @@ namespace ArduinoStudio7
                     if (index >= 0) { _documents.SelectedIndex = index; tabMenu.Show(_documents, e.Location); }
                 }
             };
+            DecorateMenuItems(tabMenu.Items);
             _documents.ContextMenuStrip = tabMenu;
 
             // Десният панел е оформен като работно пространство: бързи действия, филтър, дърво и свойства.
@@ -258,6 +276,7 @@ namespace ArduinoStudio7
             treeMenu.Items.Add("Качи към платката", null, (s, e) => UploadSketch());
             treeMenu.Items.Add("Отвори във File Explorer", null, (s, e) => OpenSelectedPathInExplorer());
             treeMenu.Items.Add("Изтрий избрания файл...", null, (s, e) => DeleteSelectedProjectFile());
+            DecorateMenuItems(treeMenu.Items);
             _projectTree.ContextMenuStrip = treeMenu;
             _projectTree.NodeMouseClick += (s, e) =>
             {
@@ -329,9 +348,9 @@ namespace ArduinoStudio7
             var rightTools = new SplitContainer
             {
                 Size = new Size(330, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
-                SplitterDistance = 430, Panel1MinSize = 180, Panel2MinSize = 100,
-                FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
-                BackColor = Color.FromArgb(198, 207, 222), SplitterWidth = 6
+                SplitterDistance = 430, Panel1MinSize = 130, Panel2MinSize = 75,
+                FixedPanel = FixedPanel.None, IsSplitterFixed = false,
+                BackColor = Color.FromArgb(150, 165, 188), SplitterWidth = 8
             };
             rightTools.Panel1.Controls.Add(projectPanel);
             rightTools.Panel2.Controls.Add(propertiesPanel);
@@ -340,9 +359,9 @@ namespace ArduinoStudio7
             var upper = new SplitContainer
             {
                 Size = new Size(1200, 700), Dock = DockStyle.Fill, Orientation = Orientation.Vertical,
-                SplitterDistance = 900, Panel1MinSize = 350, Panel2MinSize = 220,
-                FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
-                BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
+                SplitterDistance = 900, Panel1MinSize = 280, Panel2MinSize = 160,
+                FixedPanel = FixedPanel.None, IsSplitterFixed = false,
+                BackColor = Color.FromArgb(150, 165, 188), SplitterWidth = 8
             };
             upper.Panel1.Controls.Add(_documents);
             upper.Panel2.Controls.Add(rightTools);
@@ -366,6 +385,7 @@ namespace ArduinoStudio7
             outputMenu.Items.Add(new ToolStripSeparator());
             outputMenu.Items.Add("Изчисти изхода", null, (s, e) => _output.Clear());
             outputMenu.Items.Add("Запази изхода във файл...", null, (s, e) => SaveOutputToFile());
+            DecorateMenuItems(outputMenu.Items);
             _output.ContextMenuStrip = outputMenu;
             _output.MouseDoubleClick += (s, e) => NavigateFromBuildOutput();
             var lower = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(248, 249, 252) };
@@ -380,9 +400,9 @@ namespace ArduinoStudio7
             var split = new SplitContainer
             {
                 Size = new Size(1200, 700), Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
-                SplitterDistance = 500, Panel1MinSize = 220, Panel2MinSize = 90,
-                FixedPanel = FixedPanel.Panel2, IsSplitterFixed = false,
-                BackColor = Color.FromArgb(210, 210, 210), SplitterWidth = 5
+                SplitterDistance = 500, Panel1MinSize = 180, Panel2MinSize = 65,
+                FixedPanel = FixedPanel.None, IsSplitterFixed = false,
+                BackColor = Color.FromArgb(150, 165, 188), SplitterWidth = 8
             };
             split.Panel1.Controls.Add(upper);
             split.Panel2.Controls.Add(lower);
@@ -515,6 +535,87 @@ namespace ArduinoStudio7
             if (value == null) return;
             if (!Int32.TryParse(value, out line) || !_editor.GoToLine(line))
                 MessageBox.Show(this, "Въведете валиден номер на ред.", "Отиди на ред", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        // Икони за менюта: рисуваме компактни 16x16 пиктограми, без външни библиотеки.
+        private void DecorateMenuItems(ToolStripItemCollection items)
+        {
+            foreach (ToolStripItem item in items)
+            {
+                var menuItem = item as ToolStripMenuItem;
+                if (menuItem == null) continue;
+                if (menuItem.Text.Length > 0 && menuItem.Text != "Последно отваряни файлове")
+                    menuItem.Image = CreateMenuIcon(GetMenuGlyph(menuItem.Text), GetMenuIconColor(menuItem.Text));
+                if (menuItem.DropDownItems.Count > 0) DecorateMenuItems(menuItem.DropDownItems);
+            }
+        }
+
+        private string GetMenuGlyph(string caption)
+        {
+            string t = caption.ToLowerInvariant();
+            if (t.Contains("нов")) return "+";
+            if (t.Contains("отвори") || t.Contains("папка")) return "▰";
+            if (t.Contains("запиши") || t.Contains("запази")) return "▣";
+            if (t.Contains("затвори") || t.Contains("изход")) return "×";
+            if (t.Contains("компил") || t.Contains("провери")) return "✓";
+            if (t.Contains("качи")) return "↑";
+            if (t.Contains("търси") || t.Contains("намери") || t.Contains("замени")) return "⌕";
+            if (t.Contains("ред") || t.Contains("символ") || t.Contains("дефиниц")) return "¶";
+            if (t.Contains("настрой") || t.Contains("инструмент")) return "⚙";
+            if (t.Contains("копирай")) return "▢";
+            if (t.Contains("изтрий") || t.Contains("почист")) return "⌫";
+            if (t.Contains("помощ") || t.Contains("справка")) return "?";
+            if (t.Contains("обнови") || t.Contains("refresh")) return "↻";
+            if (t.Contains("платка") || t.Contains("порт")) return "▤";
+            return "•";
+        }
+
+        private Color GetMenuIconColor(string caption)
+        {
+            string t = caption.ToLowerInvariant();
+            if (t.Contains("изтрий") || t.Contains("затвори") || t.Contains("изход")) return Color.FromArgb(190, 65, 65);
+            if (t.Contains("компил") || t.Contains("запиши")) return Color.FromArgb(35, 135, 95);
+            if (t.Contains("качи")) return Color.FromArgb(45, 105, 190);
+            return Color.FromArgb(65, 100, 155);
+        }
+
+        private Bitmap CreateMenuIcon(string glyph, Color color)
+        {
+            var bitmap = new Bitmap(18, 18);
+            using (Graphics g = Graphics.FromImage(bitmap))
+            using (var font = new Font("Segoe UI Symbol", 12.0f, FontStyle.Bold, GraphicsUnit.Pixel))
+            using (var brush = new SolidBrush(color))
+            {
+                g.Clear(Color.Transparent);
+                g.DrawString(glyph, font, brush, new PointF(1, 0));
+            }
+            return bitmap;
+        }
+
+        // Рисува таб с името на файла и бутон X вдясно.
+        private void DrawDocumentTab(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= _documents.TabPages.Count) return;
+            TabPage page = _documents.TabPages[e.Index];
+            bool selected = (e.State & DrawItemState.Selected) != 0;
+            Rectangle bounds = _documents.GetTabRect(e.Index);
+            using (var background = new SolidBrush(selected ? Color.White : Color.FromArgb(232, 237, 246)))
+            using (var border = new Pen(selected ? Color.FromArgb(90, 125, 180) : Color.FromArgb(205, 214, 226)))
+            using (var textBrush = new SolidBrush(Color.FromArgb(40, 52, 72)))
+            using (var closeBrush = new SolidBrush(Color.FromArgb(105, 115, 130)))
+            using (var font = new Font("Segoe UI", 8.5f, selected ? FontStyle.Bold : FontStyle.Regular))
+            {
+                e.Graphics.FillRectangle(background, bounds);
+                e.Graphics.DrawRectangle(border, bounds);
+                string caption = page.Text;
+                SizeF size = e.Graphics.MeasureString(caption, font);
+                e.Graphics.DrawString(caption, font, textBrush,
+                    bounds.Left + 9, bounds.Top + Math.Max(3, (bounds.Height - size.Height) / 2));
+                Rectangle close = new Rectangle(bounds.Right - 25, bounds.Top + 6, 17, 17);
+                e.Graphics.FillEllipse(new SolidBrush(Color.FromArgb(242, 224, 224)), close);
+                using (var xFont = new Font("Segoe UI", 9.0f, FontStyle.Bold))
+                    e.Graphics.DrawString("×", xFont, closeBrush, close.Left + 3, close.Top - 1);
+            }
         }
 
         private ToolStripButton Button(string text, EventHandler action)
