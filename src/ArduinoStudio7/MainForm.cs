@@ -1059,9 +1059,11 @@ namespace ArduinoStudio7
                     return true;
             }
 
-            // Променлива или макрос — търсим само като самостоятелна декларация.
-            var variablePattern = new Regex(@"(?m)^[ \t]*(?:#\s*define[ \t]+)?" + escaped +
-                @"\b(?=[ \t]*(?:[=;,[)]|$))", RegexOptions.CultureInvariant);
+            // Променлива: изискваме тип преди името; не приемаме обикновено използване.
+            var variablePattern = new Regex(
+                @"(?m)^[ \t]*(?:(?:const|static|volatile|extern|unsigned|signed)\s+)*(?:[A-Za-z_][A-Za-z0-9_:<>]*[ \t]+)+(?:[*&][ \t]*)?" +
+                escaped + @"\b[ \t]*(?:\[[^\]]*\])?[ \t]*(?:=[^;]*)?;|^[ \t]*#\s*define[ \t]+" +
+                escaped + @"\b", RegexOptions.CultureInvariant);
             foreach (var document in documents)
             {
                 Match match = variablePattern.Match(document.Value);
