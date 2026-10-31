@@ -607,13 +607,25 @@ namespace ArduinoStudio7
         {
             // При скролиране само рестартираме таймера; не търсим думи и не сканираме текста.
             _lastMousePoint = e.Location;
+            int index = CharPositionFromPoint(e.X, e.Y);
+            string word = (index >= 0 && index < TextLength) ? GetWordAt(index) : String.Empty;
+
+            // Не скриваме подсказката при всяко минимално движение.
+            // Таймерът се рестартира само когато курсорът премине върху друга дума.
+            if (String.Equals(word, _lastHintWord, StringComparison.Ordinal) && _hintVisible)
+                return;
+
             _hintTimer.Stop();
-            _hintTimer.Start();
             if (_hintVisible)
             {
                 _hint.Hide(this);
                 _hintVisible = false;
             }
+            _lastHintWord = word;
+            if (!String.IsNullOrEmpty(word))
+                _hintTimer.Start();
+            else
+                HideHint();
         }
 
         // Изпълнява се само след 2 секунди неподвижна мишка.
