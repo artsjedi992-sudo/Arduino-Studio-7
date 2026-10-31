@@ -958,10 +958,128 @@ namespace ArduinoStudio7
                 SaveDocument(page);
         }
 
+        // Връща отворените документи и файловете от текущата папка на проекта.
+        // Използваме и текста от табовете, за да се виждат незаписаните промени.
+        private IEnumerable<KeyValuePair<string, string>> GetProjectSourceDocuments()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pair in _tabEditors)
+            {
+                string openPath = pair.Key.Tag as string;
+                if (!String.IsNullOrEmpty(openPath))
+                    seen.Add(Path.GetFullPath(openPath));
+                yield return new KeyValuePair<string, string>(openPath ?? pair.Key.Text, pair.Value.Text);
+            }
+
+            if (String.IsNullOrEmpty(_projectFolder) || !Directory.Exists(_projectFolder))
+                yield break;
+
+            string[] extensions = { ".ino", ".pde", ".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".cxx" };
+            string[] files;
+            try
+            {
+                // Ограничаваме броя, за да не блокираме редактора при огромни папки.
+                files = Directory.GetFiles(_projectFolder, "*.*", SearchOption.AllDirectories)
+                    .Where(path => extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                    .Take(500).ToArray();
+            }
+            catch { yield break; }
+
+            foreach (string path in files)
+            {
+                string fullPath;
+                try { fullPath = Path.GetFullPath(path); }
+                catch { continue; }
+                if (!seen.Add(fullPath)) continue;
+
+                string source;
+                try
+                {
+                    var info = new FileInfo(fullPath);
+                    if (info.Length > 1024 * 1024) continue; // Пропускаме файлове над 1 MB.
+                    source = File.ReadAllText(fullPath);
+                }
+                catch { continue; }
+
+                yield return new KeyValuePair<string, string>(fullPath, source);
+            }
+        }
+
+        // Намира дефиниция на функция в друг .ino/.cpp/.h файл и отваря точния ред.
+        private bool NavigateToProjectSymbol(string symbol)
+        {
+            if (String.IsNullOrWhiteSpace(symbol)) return false;
+            string escaped = Regex.Escape(symbol);
+            var definitionPattern = new Regex(
+                @"(?m)^[ \\t]*(?:(?:static|inline|virtual|constexpr|extern|IRAM_ATTR)\\s+)*(?:[\\w:~*&<>]+[ \\t]+)+" +
+                escaped + @"[ \\t]*\\([^;{}]*\\)[ \\t]*(?:const[ \\t]*)?(?:\\{|\\r?\\n[ \\t]*\\{)",
+                RegexOptions.CultureInvariant);
+
+            foreach (var document in GetProjectSourceDocuments())
+            {
+                Match match = definitionPattern.Match(document.Value);
+                if (!match.Success) continue;
+
+                string path = document.Key;
+                if (String.IsNullOrEmpty(path) || !File.Exists(path)) continue;
+                int line = 1;
+                for (int i = 0; i < match.Index; i++)
+                    if (document.Value[i] == '\\n') line++;
+
+                LoadFile(path);
+                if (_editor != null) _editor.GoToLine(line);
+                return true;
+            }
+            return false;
+        }
+
+        // Извлича подпис на функция или тип на променлива от файловете на проекта.
+        private string GetProjectSymbolHint(string symbol)
+        {
+            if (String.IsNullOrWhiteSpace(symbol)) return null;
+            string escaped = Regex.Escape(symbol);
+
+            // Първо търсим функция с нейния тип на връщане и списък с параметри.
+            var functionPattern = new Regex(
+                @"(?m)^\\s*((?:(?:static|inline|virtual|constexpr|extern)\\s+)*(?:[\\w:~*&<>]+\\s+)+)" +
+                escaped + @"\\s*\\(([^;{}]*)\\)\\s*(?:const\\s*)?(?:;|\\{|$)",
+                RegexOptions.CultureInvariant);
+            // След това търсим декларация на променлива или поле.
+            var variablePattern = new Regex(
+                @"(?m)^\\s*((?:(?:const|static|volatile|unsigned|signed)\\s+)*(?:[\\w:~*&<>]+\\s+)+)" +
+                escaped + @"\\s*(?:\\[[^\\]]*\\])?\\s*(?:=[^;]*)?;",
+                RegexOptions.CultureInvariant);
+
+            foreach (var document in GetProjectSourceDocuments())
+            {
+                Match function = functionPattern.Match(document.Value);
+                if (function.Success)
+                {
+                    string signature = (function.Groups[1].Value + symbol + "(" +
+                        Regex.Replace(function.Groups[2].Value.Trim(), @"\\s+", " ") + ")");
+                    return "Функция в проекта: " + signature.Trim();
+                }
+
+                Match variable = variablePattern.Match(document.Value);
+                if (variable.Success)
+                    return "Декларация в проекта: " + Regex.Replace(variable.Groups[1].Value, @"\\s+", " ").Trim() + " " + symbol;
+            }
+            return null;
+        }
+
+        // Свързва всеки редактор с общото търсене в проекта.
+        private void ConnectProjectIntelligence(CodeEditor editor)
+        {
+            editor.ExternalNavigate = NavigateToProjectSymbol;
+            editor.ExternalHint = GetProjectSymbolHint;
+        }
+
         // Създава таб с отделен редактор и номерация на редовете в лявата лента.
         private void AddDocumentTab(string path, string content, string title)
         {
             var editor = new CodeEditor();
+            ConnectProjectIntelligence(editor);
             editor.Dock = DockStyle.Fill;
             editor.Margin = Padding.Empty;
             editor.Text = content ?? String.Empty;
