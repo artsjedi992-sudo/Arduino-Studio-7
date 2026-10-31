@@ -538,56 +538,211 @@ namespace ArduinoStudio7
         }
 
         // Икони за менюта: рисуваме компактни 16x16 пиктограми, без външни библиотеки.
+        // Добавя единен комплект от графични икони към основното и контекстните менюта.
+        // Иконите се рисуват като векторни форми в Bitmap, без външни библиотеки и без шрифтови символи.
         private void DecorateMenuItems(ToolStripItemCollection items)
         {
             foreach (ToolStripItem item in items)
             {
                 var menuItem = item as ToolStripMenuItem;
                 if (menuItem == null) continue;
+
                 if (menuItem.Text.Length > 0 && menuItem.Text != "Последно отваряни файлове")
-                    menuItem.Image = CreateMenuIcon(GetMenuGlyph(menuItem.Text), GetMenuIconColor(menuItem.Text));
-                if (menuItem.DropDownItems.Count > 0) DecorateMenuItems(menuItem.DropDownItems);
+                {
+                    menuItem.Image = CreateMenuIcon(GetMenuIconKind(menuItem.Text));
+                    menuItem.ImageScaling = ToolStripItemImageScaling.None;
+                    menuItem.ImageTransparentColor = Color.Magenta;
+                }
+
+                if (menuItem.DropDownItems.Count > 0)
+                    DecorateMenuItems(menuItem.DropDownItems);
             }
         }
 
-        private string GetMenuGlyph(string caption)
+        // Определя вида на иконата по действието, а не по произволен текстов знак.
+        private string GetMenuIconKind(string caption)
         {
             string t = caption.ToLowerInvariant();
-            if (t.Contains("нов")) return "+";
-            if (t.Contains("отвори") || t.Contains("папка")) return "▰";
-            if (t.Contains("запиши") || t.Contains("запази")) return "▣";
-            if (t.Contains("затвори") || t.Contains("изход")) return "×";
-            if (t.Contains("компил") || t.Contains("провери")) return "✓";
-            if (t.Contains("качи")) return "↑";
-            if (t.Contains("търси") || t.Contains("намери") || t.Contains("замени")) return "⌕";
-            if (t.Contains("ред") || t.Contains("символ") || t.Contains("дефиниц")) return "¶";
-            if (t.Contains("настрой") || t.Contains("инструмент")) return "⚙";
-            if (t.Contains("копирай")) return "▢";
-            if (t.Contains("изтрий") || t.Contains("почист")) return "⌫";
-            if (t.Contains("помощ") || t.Contains("справка")) return "?";
-            if (t.Contains("обнови") || t.Contains("refresh")) return "↻";
-            if (t.Contains("платка") || t.Contains("порт")) return "▤";
-            return "•";
+
+            if (t.Contains("нов")) return "new";
+            if (t.Contains("отвори") && (t.Contains("папка") || t.Contains("проект"))) return "folder";
+            if (t.Contains("папка") || t.Contains("директор")) return "folder";
+            if (t.Contains("отвори") || t.Contains("зареди") || t.Contains("възстанови")) return "open";
+            if (t.Contains("запиши") || t.Contains("запази")) return "save";
+            if (t.Contains("затвори") || t.Contains("изход")) return "close";
+            if (t.Contains("компил") || t.Contains("провери")) return "build";
+            if (t.Contains("качи")) return "upload";
+            if (t.Contains("търси") || t.Contains("намери") || t.Contains("замени")) return "search";
+            if (t.Contains("символ") || t.Contains("функци") || t.Contains("ред")) return "code";
+            if (t.Contains("настрой") || t.Contains("инструмент")) return "settings";
+            if (t.Contains("копирай") || t.Contains("дублирай")) return "copy";
+            if (t.Contains("изтрий") || t.Contains("почист")) return "delete";
+            if (t.Contains("помощ") || t.Contains("справка") || t.Contains("за arduino")) return "help";
+            if (t.Contains("обнови") || t.Contains("refresh")) return "refresh";
+            if (t.Contains("платка") || t.Contains("порт") || t.Contains("com")) return "board";
+            if (t.Contains("коментар") || t.Contains("отстъп") || t.Contains("букви")) return "edit";
+            if (t.Contains("изчисти") || t.Contains("махни")) return "clear";
+            if (t.Contains("дата") || t.Contains("час")) return "clock";
+            if (t.Contains("прозорец") || t.Contains("изход")) return "window";
+
+            return "generic";
         }
 
-        private Color GetMenuIconColor(string caption)
+        // Създава 20x20 икона с прозрачност и изглаждане за Windows Forms менюта.
+        private Bitmap CreateMenuIcon(string kind)
         {
-            string t = caption.ToLowerInvariant();
-            if (t.Contains("изтрий") || t.Contains("затвори") || t.Contains("изход")) return Color.FromArgb(190, 65, 65);
-            if (t.Contains("компил") || t.Contains("запиши")) return Color.FromArgb(35, 135, 95);
-            if (t.Contains("качи")) return Color.FromArgb(45, 105, 190);
-            return Color.FromArgb(65, 100, 155);
-        }
-
-        private Bitmap CreateMenuIcon(string glyph, Color color)
-        {
-            var bitmap = new Bitmap(18, 18);
+            var bitmap = new Bitmap(20, 20);
             using (Graphics g = Graphics.FromImage(bitmap))
-            using (var font = new Font("Segoe UI Symbol", 12.0f, FontStyle.Bold, GraphicsUnit.Pixel))
-            using (var brush = new SolidBrush(color))
             {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                 g.Clear(Color.Transparent);
-                g.DrawString(glyph, font, brush, new PointF(1, 0));
+
+                Color main = Color.FromArgb(48, 105, 175);
+                Color dark = Color.FromArgb(42, 57, 78);
+                Color pale = Color.FromArgb(225, 237, 250);
+                Color green = Color.FromArgb(38, 151, 105);
+                Color red = Color.FromArgb(195, 76, 76);
+                Color orange = Color.FromArgb(211, 137, 48);
+
+                using (var pen = new Pen(dark, 1.6f))
+                using (var accent = new Pen(main, 1.8f))
+                using (var fill = new SolidBrush(pale))
+                using (var accentFill = new SolidBrush(main))
+                using (var greenPen = new Pen(green, 1.9f))
+                using (var redPen = new Pen(red, 1.9f))
+                {
+                    pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    accent.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    accent.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    greenPen.StartCap = greenPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    redPen.StartCap = redPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+
+                    switch (kind)
+                    {
+                        case "new":
+                            g.FillRectangle(fill, 4, 2, 10, 15);
+                            g.DrawRectangle(pen, 4, 2, 10, 15);
+                            g.DrawLine(pen, 7, 6, 11, 6);
+                            g.DrawLine(pen, 7, 9, 11, 9);
+                            g.DrawLine(greenPen, 14, 12, 14, 19);
+                            g.DrawLine(greenPen, 10.5f, 15.5f, 17.5f, 15.5f);
+                            break;
+                        case "open":
+                        case "folder":
+                            g.FillPolygon(new SolidBrush(Color.FromArgb(244, 194, 87)),
+                                new[] { new Point(2, 5), new Point(8, 5), new Point(10, 7), new Point(18, 7), new Point(17, 16), new Point(3, 16) });
+                            g.DrawPolygon(pen, new[] { new Point(2, 5), new Point(8, 5), new Point(10, 7), new Point(18, 7), new Point(17, 16), new Point(3, 16) });
+                            g.DrawLine(accent, 3, 9, 17, 9);
+                            break;
+                        case "save":
+                            g.FillRectangle(fill, 3, 2, 14, 16);
+                            g.DrawRectangle(pen, 3, 2, 14, 16);
+                            g.FillRectangle(accentFill, 6, 2, 8, 5);
+                            g.DrawRectangle(pen, 6, 2, 8, 5);
+                            g.FillRectangle(Brushes.White, 6, 11, 8, 7);
+                            g.DrawRectangle(pen, 6, 11, 8, 7);
+                            g.DrawLine(pen, 8, 13, 12, 13);
+                            break;
+                        case "close":
+                            g.DrawLine(redPen, 5, 5, 15, 15);
+                            g.DrawLine(redPen, 15, 5, 5, 15);
+                            break;
+                        case "build":
+                            g.FillEllipse(new SolidBrush(Color.FromArgb(226, 245, 235)), 2, 2, 16, 16);
+                            g.DrawEllipse(greenPen, 2, 2, 16, 16);
+                            g.DrawLines(greenPen, new[] { new Point(5, 10), new Point(8, 13), new Point(14, 6) });
+                            break;
+                        case "upload":
+                            g.DrawLine(accent, 10, 17, 10, 5);
+                            g.DrawLines(accent, new[] { new Point(5, 10), new Point(10, 5), new Point(15, 10) });
+                            g.DrawLine(pen, 4, 17, 16, 17);
+                            break;
+                        case "search":
+                            g.DrawEllipse(accent, 2, 2, 11, 11);
+                            g.DrawLine(accent, 11, 11, 18, 18);
+                            break;
+                        case "code":
+                            g.DrawLines(accent, new[] { new Point(7, 4), new Point(3, 10), new Point(7, 16) });
+                            g.DrawLines(accent, new[] { new Point(13, 4), new Point(17, 10), new Point(13, 16) });
+                            g.DrawLine(pen, 11, 3, 8, 17);
+                            break;
+                        case "settings":
+                            g.DrawEllipse(accent, 5, 5, 10, 10);
+                            g.DrawEllipse(accent, 8, 8, 4, 4);
+                            for (int n = 0; n < 8; n++)
+                            {
+                                double angle = n * Math.PI / 4.0;
+                                float x1 = 10 + (float)Math.Cos(angle) * 6;
+                                float y1 = 10 + (float)Math.Sin(angle) * 6;
+                                float x2 = 10 + (float)Math.Cos(angle) * 8;
+                                float y2 = 10 + (float)Math.Sin(angle) * 8;
+                                g.DrawLine(accent, x1, y1, x2, y2);
+                            }
+                            break;
+                        case "copy":
+                            g.FillRectangle(fill, 6, 3, 10, 13);
+                            g.DrawRectangle(pen, 6, 3, 10, 13);
+                            g.FillRectangle(Brushes.White, 3, 6, 10, 12);
+                            g.DrawRectangle(accent, 3, 6, 10, 12);
+                            break;
+                        case "delete":
+                            g.DrawLine(redPen, 4, 5, 16, 5);
+                            g.DrawLine(redPen, 7, 3, 13, 3);
+                            g.DrawLine(redPen, 6, 6, 7, 17);
+                            g.DrawLine(redPen, 14, 6, 13, 17);
+                            g.DrawLine(redPen, 7, 17, 13, 17);
+                            g.DrawLine(pen, 9, 8, 9, 14);
+                            g.DrawLine(pen, 11, 8, 11, 14);
+                            break;
+                        case "help":
+                            g.DrawEllipse(accent, 2, 2, 16, 16);
+                            using (var f = new Font("Segoe UI", 13, FontStyle.Bold, GraphicsUnit.Pixel))
+                                g.DrawString("?", f, new SolidBrush(main), 5, 2);
+                            break;
+                        case "refresh":
+                            g.DrawArc(accent, 3, 3, 14, 14, 35, 285);
+                            g.DrawLines(accent, new[] { new Point(13, 3), new Point(17, 4), new Point(16, 8) });
+                            break;
+                        case "board":
+                            g.FillRectangle(fill, 4, 4, 12, 12);
+                            g.DrawRectangle(accent, 4, 4, 12, 12);
+                            for (int n = 0; n < 4; n++)
+                            {
+                                int p = 6 + n * 3;
+                                g.DrawLine(pen, p, 1, p, 4);
+                                g.DrawLine(pen, p, 16, p, 19);
+                                g.DrawLine(pen, 1, p, 4, p);
+                                g.DrawLine(pen, 16, p, 19, p);
+                            }
+                            break;
+                        case "edit":
+                            g.DrawLine(accent, 4, 15, 14, 5);
+                            g.DrawLine(accent, 12, 4, 16, 8);
+                            g.DrawLine(pen, 3, 17, 7, 16);
+                            break;
+                        case "clear":
+                            g.DrawLine(redPen, 4, 4, 16, 16);
+                            g.DrawLine(redPen, 16, 4, 4, 16);
+                            break;
+                        case "clock":
+                            g.DrawEllipse(accent, 2, 2, 16, 16);
+                            g.DrawLine(pen, 10, 5, 10, 10);
+                            g.DrawLine(pen, 10, 10, 14, 12);
+                            break;
+                        case "window":
+                            g.DrawRectangle(accent, 2, 3, 16, 13);
+                            g.DrawLine(accent, 2, 7, 18, 7);
+                            g.FillEllipse(accentFill, 4, 4, 2, 2);
+                            g.FillEllipse(accentFill, 7, 4, 2, 2);
+                            break;
+                        default:
+                            g.DrawEllipse(accent, 3, 3, 14, 14);
+                            g.DrawLine(accent, 6, 10, 14, 10);
+                            break;
+                    }
+                }
             }
             return bitmap;
         }
