@@ -1026,32 +1026,87 @@ namespace ArduinoStudio7
             _projectSourceCacheRoot = "";
         }
 
-        // Намира дефиниция на функция в друг .ino/.cpp/.h файл и отваря точния ред.
+        // Намира първо дефиницията, а ако липсва — прототипа/декларацията във всички файлове на проекта.
         private bool NavigateToProjectSymbol(string symbol)
         {
             if (String.IsNullOrWhiteSpace(symbol)) return false;
             string escaped = Regex.Escape(symbol);
-            var definitionPattern = new Regex(
-                @"(?m)^[ \t]*(?:(?:static|inline|virtual|constexpr|extern|IRAM_ATTR)\s+)*(?:[\w:~*&<>]+[ \t]+)+" +
-                escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?(?:\{|\r?\n[ \t]*\{)",
+
+            // Поддържаме квалификатори, указатели, препратки, шаблонни типове и const методи.
+            string prefix = @"(?m)^[ \t]*(?:(?:static|inline|virtual|constexpr|extern|IRAM_ATTR|__attribute__\s*\(\([^)]*\)\))\s+)*(?:[\w:~*&<>]+[ \t]+)+";
+            string suffix = escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?";
+
+            var definitionPattern = new Regex(prefix + suffix + @"(?:\{|\r?\n[ \t]*\{)",
+                RegexOptions.CultureInvariant);
+            var declarationPattern = new Regex(prefix + suffix + @";",
                 RegexOptions.CultureInvariant);
 
-            foreach (var document in GetProjectSourceDocuments())
+            var documents = GetProjectSourceDocuments();
+
+            // Приоритет 1: дефиниция с тяло на функцията.
+            foreach (var document in documents)
             {
                 Match match = definitionPattern.Match(document.Value);
-                if (!match.Success) continue;
+                if (match.Success && NavigateToDocumentPosition(document.Key, document.Value, match.Index))
+                    return true;
+            }
 
-                string path = document.Key;
-                if (String.IsNullOrEmpty(path) || !File.Exists(path)) continue;
-                int line = 1;
-                for (int i = 0; i < match.Index; i++)
-                    if (document.Value[i] == '\n') line++;
+            // Приоритет 2: прототип/декларация в header или друг source файл.
+            foreach (var document in documents)
+            {
+                Match match = declarationPattern.Match(document.Value);
+                if (match.Success && NavigateToDocumentPosition(document.Key, document.Value, match.Index))
+                    return true;
+            }
 
-                LoadFile(path);
-                if (_editor != null) _editor.GoToLine(line);
-                return true;
+            // Променлива или макрос — търсим само като самостоятелна декларация.
+            var variablePattern = new Regex(@"(?m)^[ \t]*(?:#\s*define[ \t]+)?" + escaped +
+                @"\b(?=[ \t]*(?:[=;,[)]|$))", RegexOptions.CultureInvariant);
+            foreach (var document in documents)
+            {
+                Match match = variablePattern.Match(document.Value);
+                if (match.Success && NavigateToDocumentPosition(document.Key, document.Value, match.Index))
+                    return true;
             }
             return false;
+        }
+
+        // Отваря файл или активира таба му и премества курсора на намерения ред.
+        private bool NavigateToDocumentPosition(string path, string source, int position)
+        {
+            if (String.IsNullOrEmpty(path)) return false;
+            int line = 1;
+            for (int i = 0; i < position && i < source.Length; i++)
+                if (source[i] == '\n') line++;
+
+            // Отворен таб може да съдържа незаписани промени — не го презаписваме от диска.
+            foreach (TabPage page in _documents.TabPages)
+            {
+                if (!(page.Tag is string)) continue;
+                try
+                {
+                    if (String.Equals(Path.GetFullPath((string)page.Tag), Path.GetFullPath(path),
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        _documents.SelectedTab = page;
+                        CodeEditor openEditor;
+                        if (_tabEditors.TryGetValue(page, out openEditor))
+                        {
+                            openEditor.GoToLine(line);
+                            openEditor.Focus();
+                            return true;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (!File.Exists(path)) return false;
+            LoadFile(path);
+            if (_editor == null) return false;
+            _editor.GoToLine(line);
+            _editor.Focus();
+            return true;
         }
 
         // Извлича подпис на функция или тип на променлива от файловете на проекта.
