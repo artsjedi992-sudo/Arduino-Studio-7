@@ -543,7 +543,7 @@ namespace ArduinoStudio7
             }
             // Ctrl+щракване върху име на функция търси тялото ѝ в текущия файл.
             if (e.Button != MouseButtons.Left || (ModifierKeys & Keys.Control) == 0) return;
-            int index = GetCharIndexFromPosition(e.Location);
+            int index = CharPositionFromPoint(e.X, e.Y);
             if (index < 0 || index >= TextLength) return;
             string word = GetWordAt(index);
             if (String.IsNullOrEmpty(word)) return;
@@ -620,7 +620,8 @@ namespace ArduinoStudio7
         private void ShowHintForCurrentMousePosition()
         {
             if (IsDisposed || !IsHandleCreated) return;
-            int index = GetCharIndexFromPosition(_lastMousePoint);
+            // Scintilla дава директно byte/character позицията под мишката.
+            int index = CharPositionFromPoint(_lastMousePoint.X, _lastMousePoint.Y);
             if (index < 0 || index >= TextLength)
             {
                 HideHint();
@@ -640,7 +641,9 @@ namespace ArduinoStudio7
                 return;
             }
 
-            _hint.Show(tip, this, _lastMousePoint.X + 14, _lastMousePoint.Y + 18, 10000);
+            // Позиционираме подсказката до реалната позиция на курсора в редактора.
+            _hint.Show(tip, this, Math.Max(0, _lastMousePoint.X + 14),
+                Math.Max(0, _lastMousePoint.Y + 18), 10000);
             _hintVisible = true;
         }
 
