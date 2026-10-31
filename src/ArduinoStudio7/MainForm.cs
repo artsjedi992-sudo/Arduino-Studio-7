@@ -564,6 +564,15 @@ namespace ArduinoStudio7
         {
             string t = caption.ToLowerInvariant();
 
+            // Икони и за самите главни раздели на менюто.
+            if (t == "файл") return "open";
+            if (t == "редактиране") return "edit";
+            if (t == "проект") return "folder";
+            if (t == "скица") return "build";
+            if (t == "инструменти") return "settings";
+            if (t == "прозорец") return "window";
+            if (t == "помощ") return "help";
+
             if (t.Contains("нов")) return "new";
             if (t.Contains("отвори") && (t.Contains("папка") || t.Contains("проект"))) return "folder";
             if (t.Contains("папка") || t.Contains("директор")) return "folder";
