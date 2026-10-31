@@ -19,6 +19,11 @@ namespace ArduinoStudio7
         [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern IntPtr SendNativeMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
 
+        // Главният прозорец предоставя търсене в останалите файлове на проекта.
+        public Func<string, bool> ExternalNavigate { get; set; }
+        // Главният прозорец намира декларации и типове извън текущия документ.
+        public Func<string, string> ExternalHint { get; set; }
+
         private readonly ToolTip _hint = new ToolTip();
         // Подсказките се обработват само след като мишката остане неподвижна 2 секунди.
         private readonly Timer _hintTimer = new Timer();
@@ -534,7 +539,12 @@ namespace ArduinoStudio7
                 // Резервен вариант за променливи, макроси и декларации.
                 definition = Regex.Match(Text, @"(?m)^[ \t]*(?:#\s*define\s+)?" + escaped + @"\b");
             }
-            if (!definition.Success) return false;
+            if (!definition.Success)
+            {
+                // Ако символът не е в текущия файл, търсим го в останалите файлове на проекта.
+                if (ExternalNavigate != null && ExternalNavigate(word)) return true;
+                return false;
+            }
             Select(definition.Index, 0);
             ScrollToCaret();
             Focus();
@@ -651,9 +661,13 @@ namespace ArduinoStudio7
             // могат да се намерят надеждно с Ctrl+щракване или командата от менюто.
             if (_keywords.Contains(word)) return "Ключова дума или често използван Arduino символ: " + word;
 
-            // Не претърсваме целия документ при показване на подсказка.
-            // Това предотвратява забавяне при движение на мишката и скролиране.
-            // Дефинициите се намират с Ctrl+щракване или командата „Към дефиницията“.
+            // За потребителски функции, променливи и типове питаме главния прозорец.
+            // Търсенето се изпълнява след изчакване на мишката, а не при всяко движение.
+            if (ExternalHint != null)
+            {
+                string projectHint = ExternalHint(word);
+                if (!String.IsNullOrEmpty(projectHint)) return projectHint;
+            }
 
             // За неизвестен символ не показваме празна подсказка.
             return null;
