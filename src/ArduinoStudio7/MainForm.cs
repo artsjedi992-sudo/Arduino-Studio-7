@@ -573,26 +573,29 @@ namespace ArduinoStudio7
             if (t == "прозорец") return "window";
             if (t == "помощ") return "help";
 
+            // Първо разпознаваме конкретните операции, за да не получават
+            // несвързани команди една и съща икона само заради обща дума.
             if (t.Contains("нов")) return "new";
-            if (t.Contains("отвори") && (t.Contains("папка") || t.Contains("проект"))) return "folder";
-            if (t.Contains("папка") || t.Contains("директор")) return "folder";
-            if (t.Contains("отвори") || t.Contains("зареди") || t.Contains("възстанови")) return "open";
+            if (t.Contains("папка") || t.Contains("директор") || t.Contains("проект")) return "folder";
             if (t.Contains("запиши") || t.Contains("запази")) return "save";
             if (t.Contains("затвори") || t.Contains("изход")) return "close";
             if (t.Contains("компил") || t.Contains("провери")) return "build";
             if (t.Contains("качи")) return "upload";
             if (t.Contains("търси") || t.Contains("намери") || t.Contains("замени")) return "search";
-            if (t.Contains("символ") || t.Contains("функци") || t.Contains("ред")) return "code";
-            if (t.Contains("настрой") || t.Contains("инструмент")) return "settings";
+            if (t.Contains("функци") || t.Contains("символ")) return "code";
+            if (t.Contains("ред")) return "edit";
+            if (t.Contains("настрой") || t.Contains("инструмент") || t.Contains("библиотек")) return "settings";
             if (t.Contains("копирай") || t.Contains("дублирай")) return "copy";
             if (t.Contains("изтрий") || t.Contains("почист")) return "delete";
             if (t.Contains("помощ") || t.Contains("справка") || t.Contains("за arduino")) return "help";
             if (t.Contains("обнови") || t.Contains("refresh")) return "refresh";
             if (t.Contains("платка") || t.Contains("порт") || t.Contains("com")) return "board";
-            if (t.Contains("коментар") || t.Contains("отстъп") || t.Contains("букви")) return "edit";
+            if (t.Contains("коментар") || t.Contains("отстъп") || t.Contains("букви") || t.Contains("шрифта")) return "edit";
+            if (t.Contains("отметка")) return "code";
             if (t.Contains("изчисти") || t.Contains("махни")) return "clear";
             if (t.Contains("дата") || t.Contains("час")) return "clock";
-            if (t.Contains("прозорец") || t.Contains("изход")) return "window";
+            if (t.Contains("прозорец")) return "window";
+            if (t.Contains("отвори") || t.Contains("зареди") || t.Contains("възстанови")) return "open";
 
             return "generic";
         }
