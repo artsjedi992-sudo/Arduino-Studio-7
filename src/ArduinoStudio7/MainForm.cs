@@ -1012,8 +1012,8 @@ namespace ArduinoStudio7
             if (String.IsNullOrWhiteSpace(symbol)) return false;
             string escaped = Regex.Escape(symbol);
             var definitionPattern = new Regex(
-                @"(?m)^[ \\t]*(?:(?:static|inline|virtual|constexpr|extern|IRAM_ATTR)\\s+)*(?:[\\w:~*&<>]+[ \\t]+)+" +
-                escaped + @"[ \\t]*\\([^;{}]*\\)[ \\t]*(?:const[ \\t]*)?(?:\\{|\\r?\\n[ \\t]*\\{)",
+                @"(?m)^[ \t]*(?:(?:static|inline|virtual|constexpr|extern|IRAM_ATTR)\s+)*(?:[\w:~*&<>]+[ \t]+)+" +
+                escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?(?:\{|\r?\n[ \t]*\{)",
                 RegexOptions.CultureInvariant);
 
             foreach (var document in GetProjectSourceDocuments())
@@ -1025,7 +1025,7 @@ namespace ArduinoStudio7
                 if (String.IsNullOrEmpty(path) || !File.Exists(path)) continue;
                 int line = 1;
                 for (int i = 0; i < match.Index; i++)
-                    if (document.Value[i] == '\\n') line++;
+                    if (document.Value[i] == '\n') line++;
 
                 LoadFile(path);
                 if (_editor != null) _editor.GoToLine(line);
@@ -1042,13 +1042,13 @@ namespace ArduinoStudio7
 
             // Първо търсим функция с нейния тип на връщане и списък с параметри.
             var functionPattern = new Regex(
-                @"(?m)^\\s*((?:(?:static|inline|virtual|constexpr|extern)\\s+)*(?:[\\w:~*&<>]+\\s+)+)" +
-                escaped + @"\\s*\\(([^;{}]*)\\)\\s*(?:const\\s*)?(?:;|\\{|$)",
+                @"(?m)^\s*((?:(?:static|inline|virtual|constexpr|extern)\s+)*(?:[\w:~*&<>]+\s+)+)" +
+                escaped + @"\s*\(([^;{}]*)\)\s*(?:const\s*)?(?:;|\{|$)",
                 RegexOptions.CultureInvariant);
             // След това търсим декларация на променлива или поле.
             var variablePattern = new Regex(
-                @"(?m)^\\s*((?:(?:const|static|volatile|unsigned|signed)\\s+)*(?:[\\w:~*&<>]+\\s+)+)" +
-                escaped + @"\\s*(?:\\[[^\\]]*\\])?\\s*(?:=[^;]*)?;",
+                @"(?m)^\s*((?:(?:const|static|volatile|unsigned|signed)\s+)*(?:[\w:~*&<>]+\s+)+)" +
+                escaped + @"\s*(?:\[[^\]]*\])?\s*(?:=[^;]*)?;",
                 RegexOptions.CultureInvariant);
 
             foreach (var document in GetProjectSourceDocuments())
@@ -1057,13 +1057,13 @@ namespace ArduinoStudio7
                 if (function.Success)
                 {
                     string signature = (function.Groups[1].Value + symbol + "(" +
-                        Regex.Replace(function.Groups[2].Value.Trim(), @"\\s+", " ") + ")");
+                        Regex.Replace(function.Groups[2].Value.Trim(), @"\s+", " ") + ")");
                     return "Функция в проекта: " + signature.Trim();
                 }
 
                 Match variable = variablePattern.Match(document.Value);
                 if (variable.Success)
-                    return "Декларация в проекта: " + Regex.Replace(variable.Groups[1].Value, @"\\s+", " ").Trim() + " " + symbol;
+                    return "Декларация в проекта: " + Regex.Replace(variable.Groups[1].Value, @"\s+", " ").Trim() + " " + symbol;
             }
             return null;
         }
