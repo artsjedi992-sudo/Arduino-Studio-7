@@ -463,12 +463,12 @@ namespace ArduinoStudio7
             _completionMenu.Items.Clear();
             var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                { "setup", "void setup()\\r\\n{\\r\\n    // Инициализация\\r\\n}\\r\\n" },
-                { "loop", "void loop()\\r\\n{\\r\\n    // Основен цикъл\\r\\n}\\r\\n" },
-                { "if", "if (условие)\\r\\n{\\r\\n    \\r\\n}\\r\\n" },
-                { "for", "for (int i = 0; i < 10; i++)\\r\\n{\\r\\n    \\r\\n}\\r\\n" },
-                { "while", "while (условие)\\r\\n{\\r\\n    \\r\\n}\\r\\n" },
-                { "switch", "switch (стойност)\\r\\n{\\r\\n    case 0:\\r\\n        break;\\r\\n    default:\\r\\n        break;\\r\\n}\\r\\n" },
+                { "setup", "void setup()\r\n{\r\n    // Инициализация\r\n}\r\n" },
+                { "loop", "void loop()\r\n{\r\n    // Основен цикъл\r\n}\r\n" },
+                { "if", "if (условие)\r\n{\r\n    \r\n}\r\n" },
+                { "for", "for (int i = 0; i < 10; i++)\r\n{\r\n    \r\n}\r\n" },
+                { "while", "while (условие)\r\n{\r\n    \r\n}\r\n" },
+                { "switch", "switch (стойност)\r\n{\r\n    case 0:\r\n        break;\r\n    default:\r\n        break;\r\n}\r\n" },
                 { "pinMode", "pinMode(LED_BUILTIN, OUTPUT);" },
                 { "digitalWrite", "digitalWrite(LED_BUILTIN, HIGH);" },
                 { "digitalRead", "digitalRead(LED_BUILTIN)" },
