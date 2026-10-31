@@ -569,10 +569,15 @@ namespace ArduinoStudio7
                     escaped + @"[ \t]*\([^;{}]*\)[ \t]*(?:const[ \t]*)?;",
                     RegexOptions.CultureInvariant);
 
-            // За променливи и макроси търсим ред, който започва с декларацията.
+            // Променлива се приема само ако пред името има тип и след него има край на декларация.
+            // Така извикване като motorStart(); не може да бъде сбъркано с декларация.
             if (!target.Success)
                 target = Regex.Match(Text,
-                    @"(?m)^[ \t]*(?:#\s*define[ \t]+)?" + escaped + @"\b",
+                    @"(?m)^[ \t]*(?:(?:const|static|volatile|extern|unsigned|signed)\s+)*(?:[A-Za-z_][A-Za-z0-9_:<>]*[ \t]+)+(?:[*&][ \t]*)?" +
+                    escaped + @"\b[ \t]*(?:\[[^\]]*\])?[ \t]*(?:=[^;]*)?;",
+                    RegexOptions.CultureInvariant);
+            if (!target.Success)
+                target = Regex.Match(Text, @"(?m)^[ \t]*#\s*define[ \t]+" + escaped + @"\b",
                     RegexOptions.CultureInvariant);
 
             if (target.Success)
